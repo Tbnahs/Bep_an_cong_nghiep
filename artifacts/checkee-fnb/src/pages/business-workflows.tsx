@@ -354,7 +354,7 @@ const seedOrders: OrderRecord[] = [
     meal: 'Bữa trưa',
     deliveryDate: today,
     deliveryTime: '10:30',
-    status: 'Đã xuất hàng',
+    status: 'Chờ xuất',
     unitPrice: 26000,
     createdAt: new Date().toISOString(),
     items: [
@@ -475,11 +475,9 @@ const legacyManualDispatch = (order: OrderRecord): DispatchDetails => ({
   exportedAt: order.createdAt,
 });
 const normalizeOrder = (order: OrderRecord): OrderRecord => {
-  const migrated = order.id === 'DH-250814-018' && order.status === 'Đã xuất hàng' && !order.dispatch
+  const migrated = (order.id === 'DH-250814-018' || order.id === 'DH-250814-021') && order.status === 'Đã xuất hàng' && !order.dispatch
     ? { ...order, status: 'Chờ xuất' as OrderStatus }
-    : order.id === 'DH-250814-021' && order.status === 'Chờ xuất' && !order.dispatch
-      ? { ...order, status: 'Đã xuất hàng' as OrderStatus }
-      : order;
+    : order;
   if (migrated.source !== 'B') return migrated;
   return {
     ...migrated,
@@ -812,7 +810,7 @@ export function OrderManagement({ createSlip }: { createSlip: (input: CreateDisp
         </td>
         <td><span className={`badge ${order.source === 'A' ? 'badge-source-a' : 'badge-source-b'}`}>{order.source === 'A' ? <ClipboardList size={12} /> : <Pencil size={12} />}{order.source === 'A' ? 'Đặt hàng' : 'Tạo thủ công'}</span></td>
         <td><span className="type-cell">{order.customerType ?? customer?.type ?? 'Chưa cập nhật'}</span></td>
-         <td><span className="customer-name">{order.customer}</span><span className="subtext">{order.meal}</span></td>
+         <td><span className="customer-name">{order.customer}</span></td>
         <td><strong>{quantity}</strong><span className="subtext">suất xuất · {savedSamples}/{order.items.length} món lưu mẫu</span>{!samplesComplete && <span className="warning-note"><AlertCircle size={11} />Chưa đủ mẫu</span>}</td>
          <td><OrderStatusBadge status={order.status} /></td>
         <td><Link href={`/quan-ly-don-hang/${order.id}`} className="icon-button" aria-label={`Xem ${order.id}`} data-testid={`button-view-order-${order.id}`}><ChevronRight size={15} /></Link></td>
