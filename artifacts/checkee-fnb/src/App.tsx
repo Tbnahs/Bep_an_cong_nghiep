@@ -45,7 +45,7 @@ import {
 } from 'wouter';
 import type { ReactNode } from 'react';
 import NotFound from '@/pages/not-found';
-import { CustomerManagement } from '@/pages/business-workflows';
+import { CustomerManagement, OrderManagement, type CreateDispatchSlipInput } from '@/pages/business-workflows';
 
 const queryClient = new QueryClient();
 const STORAGE_KEY = 'checkee-fnb-slips-v1';
@@ -215,6 +215,7 @@ function SideNav({ currentPath, mobileOpen, onClose }: { currentPath: string; mo
     { label: 'Nguồn cung cấp', icon: Truck, href: '#' },
     { label: 'Nguyên liệu', icon: Boxes, href: '#' },
     { label: 'Quản lý khách hàng', icon: Users, href: '/quan-ly-khach-hang', active: currentPath.startsWith('/quan-ly-khach-hang') },
+    { label: 'Quản lý đơn hàng', icon: ClipboardCheck, href: '/quan-ly-don-hang', active: currentPath.startsWith('/quan-ly-don-hang') },
     { label: 'Quản lý tài khoản', icon: UserRound, href: '#' },
     { label: 'Quản lý nhân sự', icon: Users, href: '#' },
     { label: 'Sổ kiểm thực 3 bước', icon: ClipboardCheck, href: '#' },
@@ -423,15 +424,49 @@ function Detail({ slips, updateSlip }: { slips: Slip[]; updateSlip: (slip: Slip)
   );
 }
 
-function Router() {
+function Router({ createSlip }: { createSlip: (input: CreateDispatchSlipInput) => string }) {
   const [location] = useLocation();
-  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Redirect to="/quan-ly-khach-hang" />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Redirect to="/quan-ly-don-hang" />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route path="/quan-ly-don-hang" component={() => <OrderManagement createSlip={createSlip} />} /><Route path="/quan-ly-don-hang/:id" component={() => <OrderManagement createSlip={createSlip} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 function App() {
   const [slips, setSlips] = useState<Slip[]>(getInitialSlips);
   const updateSlip = (updated: Slip) => setSlips((current) => { const next = current.map((item) => item.id === updated.id ? updated : item); persistSlips(next); return next; });
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  const createSlip = (input: CreateDispatchSlipInput) => {
+    const slipId = `PX-${input.orderCode.replace('DH-', '')}`;
+    setSlips((current) => {
+      if (current.some((item) => item.id === slipId)) return current;
+      const next: Slip[] = [{
+        id: slipId,
+        orderCode: input.orderCode,
+        customer: input.customer,
+        customerShort: input.customer.length > 24 ? `${input.customer.slice(0, 24)}…` : input.customer,
+        date: input.date,
+        dispatchAt: input.dispatchAt,
+        status: input.status ?? 'Nháp',
+        payment: 'Chưa thanh toán',
+        meal: input.meal,
+        quantity: input.quantity,
+        amount: input.amount,
+        quality: 'Đạt',
+        note: 'Phiếu được tạo từ đơn hàng đã xác nhận',
+        lotCode: input.lotCode ?? '',
+        documentName: '',
+        ingredientOrigin: input.ingredients?.[0]?.origin ?? '',
+        sender: input.sender ?? '',
+        receiver: input.receiver ?? '',
+        vehicle: input.vehicle ?? '',
+        ingredients: input.ingredients?.map((item, index) => ({ id: `${slipId}-i${index + 1}`, ...item })) ?? [
+          { id: `${slipId}-i1`, name: '', origin: '', lotCode: '' },
+          { id: `${slipId}-i2`, name: '', origin: '', lotCode: '' },
+        ],
+      }, ...current];
+      persistSlips(next);
+      return next;
+    });
+    return slipId;
+  };
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router createSlip={createSlip} /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;
