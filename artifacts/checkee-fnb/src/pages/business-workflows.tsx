@@ -105,6 +105,8 @@ export type TraceabilityItem = {
   lotCode: string;
 };
 
+export type DispatchMode = 'preorder' | 'normal';
+
 export type DispatchDetails = {
   exporterName: string;
   deliveryAddress: string;
@@ -114,6 +116,7 @@ export type DispatchDetails = {
   vehiclePlate: string;
   lotCode: string;
   attachmentName?: string;
+  entryMode: DispatchMode;
   qrMode: 'lot' | 'dish';
   traceability: TraceabilityItem[];
   exportedAt: string;
@@ -477,6 +480,7 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
     vehicleType: '',
     vehiclePlate: '',
     lotCode: '',
+    entryMode: 'normal',
     qrMode: 'lot',
     traceability: [],
     exportedAt: '',
@@ -660,17 +664,21 @@ export function OrderManagement({ createSlip }: { createSlip: (input: CreateDisp
   );
 }
 
-const createDispatchDraft = (order?: OrderRecord, customer?: CustomerRecord, batchCode = ''): DispatchDetails => order?.dispatch ?? {
-  exporterName: '',
-  deliveryAddress: order?.deliveryAddress ?? customer?.deliveryAddress ?? '',
-  receiver: '',
-  signature: '',
-  vehicleType: '',
-  vehiclePlate: '',
-  lotCode: batchCode,
-  qrMode: 'lot',
-  traceability: order ? traceabilityForItems(order.items, order.deliveryDate) : [],
-  exportedAt: '',
+const createDispatchDraft = (order?: OrderRecord, customer?: CustomerRecord, batchCode = ''): DispatchDetails => {
+  const fallback: DispatchDetails = {
+    exporterName: '',
+    deliveryAddress: order?.deliveryAddress ?? customer?.deliveryAddress ?? '',
+    receiver: '',
+    signature: '',
+    vehicleType: '',
+    vehiclePlate: '',
+    lotCode: batchCode,
+    entryMode: order?.source === 'A' ? 'preorder' : 'normal',
+    qrMode: 'lot',
+    traceability: order ? traceabilityForItems(order.items, order.deliveryDate) : [],
+    exportedAt: '',
+  };
+  return order?.dispatch ? { ...fallback, ...order.dispatch, entryMode: order.dispatch.entryMode ?? fallback.entryMode } : fallback;
 };
 
 function SampleStatusBadge({ status }: { status: OrderItem['sampleStatus'] }) {
@@ -745,14 +753,20 @@ function DispatchEditor({ dispatch, items, orderedQuantity, amount, onChange, on
     const file = event.currentTarget.files?.[0];
     if (file) onChange({ attachmentName: file.name });
   };
+  const isPreorder = dispatch.entryMode === 'preorder';
+  const enteredQuantity = items.reduce((sum, item) => sum + item.supplierQuantity, 0);
   return <section className="panel">
-    <div className="panel-header"><div><h2 className="panel-heading">③ Nhập suất ăn — Tất cả các buổi</h2><p className="panel-kicker">Đối chiếu số suất thực nhập theo từng buổi và chất lượng món ăn.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+    <div className="panel-header"><div><h2 className="panel-heading">③ {isPreorder ? 'Nhập suất ăn đặt trước' : 'Nhập xuất ăn bình thường'}</h2><p className="panel-kicker">{isPreorder ? 'Đối chiếu số suất thực nhập theo từng buổi và chất lượng món ăn.' : 'Nhập trực tiếp số suất thực tế, không đối chiếu với số suất đặt trước.'}</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+    <div className="dispatch-mode-switch" role="tablist" aria-label="Hình thức nhập suất ăn">
+      <button type="button" className={`dispatch-mode-option ${isPreorder ? 'is-active' : ''}`} onClick={() => onChange({ entryMode: 'preorder' })} role="tab" aria-selected={isPreorder} data-testid="button-dispatch-mode-preorder"><ClipboardList size={14} /><span><strong>Nhập suất ăn đặt trước</strong><small>Có số suất đã đặt</small></span></button>
+      <button type="button" className={`dispatch-mode-option ${!isPreorder ? 'is-active' : ''}`} onClick={() => onChange({ entryMode: 'normal' })} role="tab" aria-selected={!isPreorder} data-testid="button-dispatch-mode-normal"><Utensils size={14} /><span><strong>Nhập xuất ăn bình thường</strong><small>Nhập theo thực tế</small></span></button>
+    </div>
     <div className="dispatch-entry-top">
-      <div className="field"><label className="field-label" htmlFor="dispatch-ordered-quantity">Số suất đã đặt</label><input id="dispatch-ordered-quantity" className="input" value={orderedQuantity} readOnly data-testid="input-dispatch-ordered-quantity" /></div>
+      {isPreorder ? <div className="field"><label className="field-label" htmlFor="dispatch-ordered-quantity">Số suất đã đặt</label><input id="dispatch-ordered-quantity" className="input" value={orderedQuantity} readOnly data-testid="input-dispatch-ordered-quantity" /></div> : <div className="field"><label className="field-label" htmlFor="dispatch-entered-quantity">Số suất nhập</label><input id="dispatch-entered-quantity" className="input" value={enteredQuantity} readOnly data-testid="input-dispatch-entered-quantity" /></div>}
       <div className="field"><label className="field-label" htmlFor="dispatch-lot">Mã lô suất ăn <span className="required-mark">*</span></label><input id="dispatch-lot" className="input mono" value={dispatch.lotCode} onChange={(event) => onChange({ lotCode: event.target.value })} placeholder="Nhập mã lô suất ăn" required data-testid="input-dispatch-lot" /></div>
     </div>
     <div className="dispatch-meal-table" role="table" aria-label="Nhập số lượng suất ăn">
-      <div className="dispatch-meal-row dispatch-meal-head" role="row"><span>Buổi</span><span>Món ăn (theo thực đơn)</span><span>Chất lượng</span><span>Nhập số lượng</span></div>
+      <div className="dispatch-meal-row dispatch-meal-head" role="row"><span>Buổi</span><span>{isPreorder ? 'Món ăn (theo thực đơn)' : 'Món ăn nhập'}</span><span>Chất lượng</span><span>Nhập số lượng</span></div>
       {items.map((item) => <div className="dispatch-meal-row" role="row" key={item.id}>
         <span>{item.meal}</span>
         <strong>{item.dish}</strong>
@@ -805,12 +819,17 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
   const [replaceOpenId, setReplaceOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [dispatchError, setDispatchError] = useState('');
-  const [dispatch, setDispatch] = useState<DispatchDetails>(() => createDispatchDraft(order, customer, batchCode));
+  const [dispatch, setDispatch] = useState<DispatchDetails>(() => {
+    const initial = createDispatchDraft(order, customer, batchCode);
+    return { ...initial, entryMode: initial.entryMode ?? (order?.source === 'A' ? 'preorder' : 'normal') };
+  });
   if (!draft) return <main className="content-wrap not-found"><div><ClipboardList size={30} color="hsl(17 91% 52%)" /><h1>Không tìm thấy đơn hàng</h1><button className="button button-primary" onClick={() => setLocation('/quan-ly-don-hang')} data-testid="button-back-orders">Về danh sách đơn hàng</button></div></main>;
   const isExported = draft.status === 'Đã xuất hàng';
-   const totalQuantity = Math.max(...draft.items.map((item) => item.supplierQuantity), 0);
+  const orderedQuantity = draft.items.reduce((sum, item) => sum + item.requestedQuantity, 0);
+  const totalQuantity = draft.items.reduce((sum, item) => sum + item.supplierQuantity, 0);
   const samplesReady = draft.items.length > 0 && draft.items.every((item) => sampleStatus(item) === 'Đã lưu');
   const setQuantity = (id: string, value: string) => setDraft({ ...draft, items: draft.items.map((item) => item.id === id ? { ...item, supplierQuantity: Math.max(0, Number(value) || 0) } : item) });
+  const setQuality = (id: string, value: OrderItem['quality']) => setDraft({ ...draft, items: draft.items.map((item) => item.id === id ? { ...item, quality: value } : item) });
   const saveQuantities = () => onUpdate(draft);
   const replaceDish = (id: string, dish: string) => {
     const current = draft.items.find((item) => item.id === id);
