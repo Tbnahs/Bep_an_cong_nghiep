@@ -354,7 +354,7 @@ const seedOrders: OrderRecord[] = [
     meal: 'Bữa trưa',
     deliveryDate: today,
     deliveryTime: '10:30',
-    status: 'Chờ xuất',
+    status: 'Đã xuất hàng',
     unitPrice: 26000,
     createdAt: new Date().toISOString(),
     items: [
@@ -475,9 +475,11 @@ const legacyManualDispatch = (order: OrderRecord): DispatchDetails => ({
   exportedAt: order.createdAt,
 });
 const normalizeOrder = (order: OrderRecord): OrderRecord => {
-  const migrated = (order.id === 'DH-250814-018' || order.id === 'DH-250814-021') && order.status === 'Đã xuất hàng' && !order.dispatch
+  const migrated = order.id === 'DH-250814-018' && order.status === 'Đã xuất hàng' && !order.dispatch
     ? { ...order, status: 'Chờ xuất' as OrderStatus }
-    : order;
+    : order.id === 'DH-250814-021' && order.status === 'Chờ xuất' && !order.dispatch
+      ? { ...order, status: 'Đã xuất hàng' as OrderStatus }
+      : order;
   if (migrated.source !== 'B') return migrated;
   return {
     ...migrated,
