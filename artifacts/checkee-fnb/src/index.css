@@ -367,6 +367,7 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
 .summary-line:last-of-type { border-bottom: 0; }
 .summary-line strong { color: hsl(var(--foreground)); font-size: 12px; }
 .sample-count { color: hsl(var(--green)); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.sample-count-warning { color: hsl(var(--amber)); }
 .sample-warning { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 13px; padding: 12px; border: 1px solid hsl(var(--amber) / .28); border-radius: 8px; color: hsl(30 50% 31%); background: hsl(var(--amber-soft)); font-size: 11px; line-height: 1.5; }
 .sample-warning svg { flex: 0 0 auto; margin-top: 1px; }
 .sample-warning strong, .sample-warning span { display: block; }
