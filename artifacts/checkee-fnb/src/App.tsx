@@ -45,7 +45,7 @@ import {
 } from 'wouter';
 import type { ReactNode } from 'react';
 import NotFound from '@/pages/not-found';
-import { CustomerManagement } from '@/pages/business-workflows';
+import { CustomerManagement, OrderManagement, type CreateDispatchSlipInput } from '@/pages/business-workflows';
 
 const queryClient = new QueryClient();
 const STORAGE_KEY = 'checkee-fnb-slips-v1';
@@ -210,6 +210,7 @@ const isDueSoon = (slip: Slip) => slip.status === 'Nháp' && new Date(slip.dispa
 function SideNav({ currentPath, mobileOpen, onClose }: { currentPath: string; mobileOpen: boolean; onClose: () => void }) {
   const items = [
     { label: 'Trang chủ', icon: LayoutDashboard, href: '/' },
+    { label: 'Quản lý đơn hàng', icon: ClipboardCheck, href: '/quan-ly-don-hang', active: currentPath.startsWith('/quan-ly-don-hang') },
     { label: 'Quản lý món ăn', icon: Utensils, href: '#' },
     { label: 'Quản lý chế biến', icon: Factory, href: '#' },
     { label: 'Nguồn cung cấp', icon: Truck, href: '#' },
@@ -259,7 +260,7 @@ function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <div className="crumbs">
             <button className="icon-button mobile-nav-toggle" onClick={() => setMobileOpen(true)} data-testid="button-open-sidebar"><ChevronRight size={16} /></button>
-            <span>Không gian nhà cung cấp</span><ChevronRight size={14} /><strong>{location.startsWith('/phieu-xuat') ? 'Chi tiết phiếu xuất' : location.startsWith('/quan-ly-khach-hang') ? 'Quản lý khách hàng' : 'Quản lý đơn hàng'}</strong>
+             <span>Không gian nhà cung cấp</span><ChevronRight size={14} /><strong>{location.startsWith('/phieu-xuat') ? 'Chi tiết phiếu xuất' : location.startsWith('/quan-ly-khach-hang') ? 'Quản lý khách hàng' : 'Quản lý đơn hàng'}</strong>
           </div>
           <div className="topbar-actions">
             <button className="icon-button" title="Thông báo" onClick={() => showTopNotice('Bạn đang có 2 thông báo cần xem')} data-testid="button-notifications"><Bell size={16} /></button>
@@ -423,15 +424,45 @@ function Detail({ slips, updateSlip }: { slips: Slip[]; updateSlip: (slip: Slip)
   );
 }
 
-function Router() {
+function Router({ createSlip }: { createSlip: (input: CreateDispatchSlipInput) => string }) {
   const [location] = useLocation();
-  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Redirect to="/quan-ly-khach-hang" />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Redirect to="/quan-ly-don-hang" />} /><Route path="/quan-ly-don-hang" component={() => <OrderManagement createSlip={createSlip} />} /><Route path="/quan-ly-don-hang/:id" component={() => <OrderManagement createSlip={createSlip} />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 function App() {
   const [slips, setSlips] = useState<Slip[]>(getInitialSlips);
   const updateSlip = (updated: Slip) => setSlips((current) => { const next = current.map((item) => item.id === updated.id ? updated : item); persistSlips(next); return next; });
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  const createSlip = (input: CreateDispatchSlipInput) => {
+    const id = `PX-${input.date.replaceAll('-', '').slice(2)}-${String(slips.length + 1).padStart(2, '0')}`;
+    const nextSlip: Slip = {
+      id,
+      orderCode: input.orderCode,
+      customer: input.customer,
+      customerShort: input.customer,
+      date: input.date,
+      dispatchAt: input.dispatchAt,
+      status: input.status ?? 'Nháp',
+      payment: 'Chưa thanh toán',
+      meal: input.meal,
+      quantity: input.quantity,
+      amount: input.amount,
+      quality: 'Đạt',
+      lotCode: input.lotCode ?? '',
+      documentName: '',
+      ingredientOrigin: '',
+      sender: input.sender ?? '',
+      receiver: input.receiver ?? '',
+      vehicle: input.vehicle ?? '',
+      ingredients: (input.ingredients ?? []).map((ingredient, index) => ({ ...ingredient, id: `generated-${index}` })),
+    };
+    setSlips((current) => {
+      const next = [...current, nextSlip];
+      persistSlips(next);
+      return next;
+    });
+    return id;
+  };
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router createSlip={createSlip} /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;
