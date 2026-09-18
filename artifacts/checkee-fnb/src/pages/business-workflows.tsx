@@ -212,6 +212,7 @@ function SignaturePad({ value, onChange, disabled = false }: { value: string; on
           data-testid="signature-pad"
         />
         {!value && !disabled && <span className="signature-hint">Ký tên tại đây</span>}
+        {disabled && value && !value.startsWith('data:image/') && <span className="signature-hint">{value}</span>}
       </div>
       <button type="button" className="text-button signature-clear" onClick={clear} disabled={disabled || !value} data-testid="button-clear-signature">Xóa chữ ký</button>
     </div>
@@ -460,9 +461,27 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 };
 
 const saveStorage = (key: string, value: unknown) => window.localStorage.setItem(key, JSON.stringify(value));
-const normalizeOrder = (order: OrderRecord): OrderRecord => order.source === 'B' && order.status !== 'Đã xuất hàng'
-  ? { ...order, status: 'Đã xuất hàng' }
-  : order;
+const legacyManualDispatch = (order: OrderRecord): DispatchDetails => ({
+  exporterName: 'Đã lưu khi tạo đơn',
+  deliveryAddress: order.deliveryAddress ?? '',
+  receiver: order.customer,
+  signature: 'Đã ký',
+  vehicleType: 'Đã lưu khi tạo đơn',
+  vehiclePlate: 'Đã lưu khi tạo đơn',
+  lotCode: batchCodeFor(order.deliveryDate, 1),
+  entryMode: 'normal',
+  qrMode: 'lot',
+  traceability: traceabilityForItems(order.items, order.deliveryDate),
+  exportedAt: order.createdAt,
+});
+const normalizeOrder = (order: OrderRecord): OrderRecord => {
+  if (order.source !== 'B') return order;
+  return {
+    ...order,
+    status: 'Đã xuất hàng',
+    dispatch: order.dispatch ?? legacyManualDispatch(order),
+  };
+};
 
 const contractState = (end: string) => {
   const remaining = Math.ceil((new Date(`${end}T23:59:59`).getTime() - Date.now()) / 86400000);
@@ -606,12 +625,6 @@ function orderStatusLabel(status: OrderStatus) {
   return status === 'Đã xuất hàng' ? 'Hoàn thành' : 'Chờ xuất';
 }
 
-function orderListReference(order: OrderRecord) {
-  return order.orderCode
-    ? `${order.id} · ${order.items.length} món ăn`
-    : `Mã tham chiếu ${order.id} · ${order.items.length} món ăn`;
-}
-
 function SourceBadge({ source }: { source: OrderSource }) {
   return <span className={`badge ${source === 'A' ? 'badge-source-a' : 'badge-source-b'}`}>{source === 'A' ? <ClipboardList size={12} /> : <Pencil size={12} />}{source === 'A' ? 'Từ hệ thống khách hàng' : 'Tạo thủ công'}</span>;
 }
@@ -738,21 +751,16 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
               <div className="field form-span-3"><label className="field-label" htmlFor="manual-note">Ghi chú</label><input id="manual-note" className="input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú cho đơn hàng (nếu có)" data-testid="input-manual-note" /></div>
           </div>
         </section>
-         <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">② Lịch giao hàng</h2><p className="panel-kicker">Chọn lại thời điểm giao thực tế cho đơn hàng.</p></div><CalendarDays size={17} color="hsl(17 91% 52%)" /></div>
-           <div className="form-grid-3">
-             <div className="field"><label className="field-label" htmlFor="manual-delivery-date-secondary">Ngày giao</label><input id="manual-delivery-date-secondary" type="date" className="input" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} required data-testid="input-manual-delivery-date-secondary" /></div>
-             <div className="field"><label className="field-label" htmlFor="manual-delivery-time-secondary">Giờ giao</label><input id="manual-delivery-time-secondary" type="time" className="input" value={deliveryTime} onChange={(event) => setDeliveryTime(event.target.value)} required data-testid="input-manual-delivery-time-secondary" /></div>
-           </div>
-         </section>
-         <section className="panel">
-              <div className="panel-header"><div><h2 className="panel-heading">③ Danh sách món</h2><p className="panel-kicker">Chọn món từ danh sách hệ thống đã lưu mẫu để đưa vào đơn xuất.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+          <section className="panel">
+              <div className="panel-header"><div><h2 className="panel-heading">② Danh sách món</h2><p className="panel-kicker">Chọn món từ danh sách hệ thống đã lưu mẫu để đưa vào đơn xuất.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
              <div className="add-dish-row"><select className="select" value={selectedDish} onChange={(event) => setSelectedDish(event.target.value)} aria-label="Chọn món đã lưu mẫu" data-testid="select-manual-dish"><option value="">Chọn món đã lưu mẫu</option>{savedSampleMenu.map((item) => <option value={item.dish} key={item.dish} disabled={items.some((selectedItem) => selectedItem.dish === item.dish)}>{item.dish}</option>)}</select><button type="button" className="button button-quiet" onClick={addDish} disabled={!selectedDish} data-testid="button-add-manual-dish"><Plus size={14} /> Thêm món</button></div>
               {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món</div><span>Chọn món ở trên để thêm vào đơn hàng.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-meal"><label className="field-label" htmlFor={`meal-${item.id}`}>Buổi</label><select id={`meal-${item.id}`} className="select" value={mealOptionFor(item.meal)} onChange={(event) => updateDishMeal(item.id, event.target.value as MealOption)} data-testid={`select-manual-meal-${item.id}`}>{MEAL_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`quantity-${item.id}`} className="input" type="number" min="1" value={item.requestedQuantity} onChange={(event) => updateDishQuantity(item.id, event.target.value)} data-testid={`input-manual-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> Xem lưu mẫu</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={deliveryDate || today} onClose={() => setSampleOpenId(null)} />}</div>)}</div>}
          </section>
         <section className="panel">
-             <div className="panel-header"><div><h2 className="panel-heading">④ Thông tin vận chuyển</h2><p className="panel-kicker">Tự nhập người giao, phương tiện và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+             <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin vận chuyển</h2><p className="panel-kicker">Chọn thời điểm giao, nhập người giao, phương tiện và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
           <div className="form-grid-3">
+             <div className="field"><label className="field-label" htmlFor="manual-delivery-date">Ngày giao</label><input id="manual-delivery-date" type="date" className="input" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} required data-testid="input-manual-delivery-date" /></div>
+             <div className="field"><label className="field-label" htmlFor="manual-delivery-time">Giờ giao</label><input id="manual-delivery-time" type="time" className="input" value={deliveryTime} onChange={(event) => setDeliveryTime(event.target.value)} required data-testid="input-manual-delivery-time" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-exporter">Tên người giao hàng</label><input id="manual-dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" data-testid="input-manual-dispatch-exporter" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-type">Phương tiện</label><input id="manual-dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-manual-dispatch-vehicle-type" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-plate">Biển số xe</label><input id="manual-dispatch-vehicle-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" data-testid="input-manual-dispatch-vehicle-plate" /></div>
@@ -795,12 +803,11 @@ export function OrderManagement({ createSlip }: { createSlip: (input: CreateDisp
             <Link href={`/quan-ly-don-hang/${order.id}`} className="slip-link mono" data-testid={`link-order-${order.id}`}>
               {order.orderCode}
             </Link>
-            <span className="subtext">{orderListReference(order)}</span>
           </> : null}
         </td>
         <td><span className={`badge ${order.source === 'A' ? 'badge-source-a' : 'badge-source-b'}`}>{order.source === 'A' ? <ClipboardList size={12} /> : <Pencil size={12} />}{order.source === 'A' ? 'Đặt hàng' : 'Tạo thủ công'}</span></td>
         <td><span className="type-cell">{order.customerType ?? customer?.type ?? 'Chưa cập nhật'}</span></td>
-         <td><span className="customer-name">{order.customer}</span><span className="subtext">{order.meal}</span><span className="subtext delivery-datetime"><CalendarDays size={10} />Đặt {displayDate(orderDateFor(order))} · {orderTimeFor(order)}</span><span className="subtext delivery-datetime"><Truck size={10} />Giao {displayDate(order.deliveryDate)} · {order.deliveryTime}</span></td>
+         <td><span className="customer-name">{order.customer}</span><span className="subtext">{order.meal}</span></td>
         <td><strong>{quantity}</strong><span className="subtext">suất xuất · {savedSamples}/{order.items.length} món lưu mẫu</span>{!samplesComplete && <span className="warning-note"><AlertCircle size={11} />Chưa đủ mẫu</span>}</td>
         <td><OrderStatusBadge status={order.status} />{order.dispatch && <span className="subtext"><CheckCircle2 size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />Có phiếu xuất</span>}</td>
         <td><Link href={`/quan-ly-don-hang/${order.id}`} className="icon-button" aria-label={`Xem ${order.id}`} data-testid={`button-view-order-${order.id}`}><ChevronRight size={15} /></Link></td>
