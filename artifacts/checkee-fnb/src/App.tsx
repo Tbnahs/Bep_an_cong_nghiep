@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import {
   Link,
+  Redirect,
   Route,
   Switch,
   Router as WouterRouter,
@@ -215,7 +216,6 @@ function SideNav({ currentPath, mobileOpen, onClose }: { currentPath: string; mo
     { label: 'Nguyên liệu', icon: Boxes, href: '#' },
     { label: 'Quản lý khách hàng', icon: Users, href: '/quan-ly-khach-hang', active: currentPath.startsWith('/quan-ly-khach-hang') },
     { label: 'Quản lý đơn hàng', icon: ClipboardCheck, href: '/quan-ly-don-hang', active: currentPath.startsWith('/quan-ly-don-hang') },
-    { label: 'Phiếu xuất suất ăn', icon: FileSpreadsheet, href: '/', active: currentPath === '/' || currentPath.startsWith('/phieu-xuat') },
     { label: 'Quản lý tài khoản', icon: UserRound, href: '#' },
     { label: 'Quản lý nhân sự', icon: Users, href: '#' },
     { label: 'Sổ kiểm thực 3 bước', icon: ClipboardCheck, href: '#' },
@@ -260,7 +260,7 @@ function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <div className="crumbs">
             <button className="icon-button mobile-nav-toggle" onClick={() => setMobileOpen(true)} data-testid="button-open-sidebar"><ChevronRight size={16} /></button>
-            <span>Không gian nhà cung cấp</span><ChevronRight size={14} /><strong>{location.startsWith('/phieu-xuat') ? 'Chi tiết phiếu xuất' : location.startsWith('/quan-ly-khach-hang') ? 'Quản lý khách hàng' : location.startsWith('/quan-ly-don-hang') ? 'Quản lý đơn hàng' : 'Phiếu xuất suất ăn'}</strong>
+            <span>Không gian nhà cung cấp</span><ChevronRight size={14} /><strong>{location.startsWith('/phieu-xuat') ? 'Chi tiết phiếu xuất' : location.startsWith('/quan-ly-khach-hang') ? 'Quản lý khách hàng' : 'Quản lý đơn hàng'}</strong>
           </div>
           <div className="topbar-actions">
             <button className="icon-button" title="Thông báo" onClick={() => showTopNotice('Bạn đang có 2 thông báo cần xem')} data-testid="button-notifications"><Bell size={16} /></button>
@@ -426,7 +426,7 @@ function Detail({ slips, updateSlip }: { slips: Slip[]; updateSlip: (slip: Slip)
 
 function Router({ slips, updateSlip, createSlip }: { slips: Slip[]; updateSlip: (slip: Slip) => void; createSlip: (input: CreateDispatchSlipInput) => string }) {
   const [location] = useLocation();
-  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Overview slips={slips} />} /><Route path="/phieu-xuat/:id" component={() => <Detail slips={slips} updateSlip={updateSlip} />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route path="/quan-ly-don-hang" component={() => <OrderManagement createSlip={createSlip} />} /><Route path="/quan-ly-don-hang/:id" component={() => <OrderManagement createSlip={createSlip} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+  return <AppShell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={() => <Redirect to="/quan-ly-don-hang" />} /><Route path="/quan-ly-khach-hang" component={CustomerManagement} /><Route path="/quan-ly-khach-hang/:id" component={CustomerManagement} /><Route path="/quan-ly-don-hang" component={() => <OrderManagement createSlip={createSlip} />} /><Route path="/quan-ly-don-hang/:id" component={() => <OrderManagement createSlip={createSlip} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 function App() {
