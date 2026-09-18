@@ -454,6 +454,7 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
   const [note, setNote] = useState('');
   const [selectedDish, setSelectedDish] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
+  const [sampleOpenId, setSampleOpenId] = useState<string | null>(null);
   const [dispatch, setDispatch] = useState<DispatchDetails>({
     exporterName: '',
     deliveryAddress: '',
@@ -494,20 +495,26 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
     setDispatch((current) => ({ ...current, ...changes }));
     setFormError('');
   };
-  const updateTraceability = (id: string, changes: Partial<TraceabilityItem>) => {
-    setDispatch((current) => ({ ...current, traceability: current.traceability.map((item) => item.id === id ? { ...item, ...changes } : item) }));
-    setFormError('');
-  };
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!customerId || !selected || !meal || !deliveryDate || !deliveryTime || !deliveryAddress.trim() || !quantity || items.length === 0) {
       setFormError('Vui lòng bổ sung đầy đủ thông tin đơn hàng và ít nhất một món ăn.');
       return;
     }
+    const traceability = items.map((item) => {
+      const sample = sampleInfoFor(item, deliveryDate);
+      return {
+        id: item.id,
+        dish: item.dish,
+        origin: sample.ingredients.map((ingredient) => ingredient.supplier).join(' · '),
+        lotCode: sample.ingredients.map((ingredient) => ingredient.lotCode).join(' · '),
+      };
+    });
     const exportedDispatch: DispatchDetails = {
       ...dispatch,
       deliveryAddress: deliveryAddress.trim(),
       lotCode: generatedLotCode,
+      traceability,
       exportedAt: new Date().toISOString(),
     };
     const missing: string[] = [];
@@ -516,7 +523,6 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
     if (!exportedDispatch.vehiclePlate.trim()) missing.push('Biển số xe');
     if (!exportedDispatch.receiver.trim()) missing.push('Người nhận');
     if (!exportedDispatch.signature.trim()) missing.push('Chữ ký / người ký');
-    if (exportedDispatch.traceability.some((item) => !item.origin.trim() || !item.lotCode.trim())) missing.push('Nguồn nguyên liệu và mã lô của từng món');
     if (missing.length) {
       setFormError(`Chưa thể tạo phiếu xuất. Vui lòng bổ sung: ${missing.join(', ')}.`);
       return;
@@ -541,6 +547,24 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
     };
     onSave(order);
   };
+  const renderSampleDetails = (item: OrderItem) => {
+    const info = sampleInfoFor(item, deliveryDate || today);
+    return <div className="manual-sample-detail" data-testid={`manual-sample-detail-${item.id}`}>
+      <div className="sample-section-heading"><div><h3>Chi tiết lưu mẫu</h3><span>Thông tin chế biến và nguyên liệu của món trong ngày giao</span></div><CheckCircle2 size={17} /></div>
+      <div className="sample-process-grid">
+        <div><span>Trạng thái</span><strong className="sample-live-status"><CheckCircle2 size={13} /> Đã lưu mẫu</strong></div>
+        <div><span>Mã truy vết</span><strong className="mono">{info.traceCode}</strong></div>
+        <div><span>Loại thực đơn</span><strong>{info.menuType}</strong></div>
+        <div><span>Đầu bếp</span><strong>{info.chef}</strong></div>
+        <div><span>Mã quy trình</span><strong className="mono">{info.processCode}</strong></div>
+        <div><span>Chế biến lúc</span><strong>{info.preparedAt}</strong></div>
+      </div>
+      <div className="sample-ingredient-table manual-sample-ingredient-table">
+        <div className="sample-ingredient-row sample-ingredient-head"><span>Nguyên liệu</span><span>Nguồn cung cấp</span><span>Số lô/mẻ</span><span>Đơn vị tính</span></div>
+        {info.ingredients.map((ingredient) => <div className="sample-ingredient-row" key={`${ingredient.name}-${ingredient.lotCode}`}><span>{ingredient.name}</span><span>{ingredient.supplier}</span><span className="mono">{ingredient.lotCode}</span><span>{ingredient.unit}</span></div>)}
+      </div>
+    </div>;
+  };
   return (
     <main className="content-wrap">
        <div className="page-heading detail-heading">
@@ -562,10 +586,10 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
          <section className="panel">
           <div className="panel-header"><div><h2 className="panel-heading">② Món ăn trong phiếu xuất</h2><p className="panel-kicker">Chọn món từ thực đơn có sẵn; hệ thống kiểm tra lưu mẫu ngay khi thêm.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
            <div className="add-dish-row"><select className="select" value={selectedDish} onChange={(event) => setSelectedDish(event.target.value)} aria-label="Chọn món có sẵn" data-testid="select-manual-dish"><option value="">Chọn món có sẵn</option>{dailyMenu.filter((item) => item.meal === meal || !meal).map((item) => <option value={item.dish} key={item.dish} disabled={items.some((selectedItem) => selectedItem.dish === item.dish)}>{item.dish} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu'}</option>)}</select><button type="button" className="button button-quiet" onClick={addDish} disabled={!selectedDish} data-testid="button-add-manual-dish"><Plus size={14} /> Thêm món</button></div>
-           {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món xuất</div><span>Chọn món ở trên để thêm vào lượt xuất.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.meal} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><SampleStatusBadge status={item.sampleStatus} /><button type="button" className="remove-row" onClick={() => removeDish(item.id)} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button></div>)}</div>}
+           {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món xuất</div><span>Chọn món ở trên để thêm vào lượt xuất.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.meal} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> {sampleOpenId === item.id ? 'Đóng thông tin' : 'Xem lưu mẫu'}</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && renderSampleDetails(item)}</div>)}</div>}
          </section>
         <section className="panel">
-          <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin xuất &amp; giao nhận</h2><p className="panel-kicker">Hoàn tất dữ liệu giao hàng và truy xuất để đơn vừa tạo cũng là phiếu xuất.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+           <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin xuất &amp; giao nhận</h2><p className="panel-kicker">Hoàn tất dữ liệu giao hàng; thông tin truy xuất đã lấy từ hồ sơ lưu mẫu.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
           <div className="form-grid-3">
             <div className="field"><label className="field-label" htmlFor="manual-dispatch-exporter">Tên người xuất</label><input id="manual-dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Họ và tên" data-testid="input-manual-dispatch-exporter" /></div>
             <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-type">Loại xe</label><input id="manual-dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-manual-dispatch-vehicle-type" /></div>
@@ -574,8 +598,6 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
             <div className="field"><label className="field-label" htmlFor="manual-dispatch-signature">Chữ ký / người ký</label><input id="manual-dispatch-signature" className="input" value={dispatch.signature} onChange={(event) => updateDispatch({ signature: event.target.value })} placeholder="Tên người ký xác nhận" data-testid="input-manual-dispatch-signature" /></div>
             <div className="field"><label className="field-label">Mã lô xuất · tự sinh</label><div className="lot-code-field mono">{generatedLotCode || 'Chọn ngày giao để sinh mã'}</div></div>
           </div>
-          <div className="panel-header" style={{ marginTop: 18 }}><div><h3 className="panel-heading" style={{ fontSize: 14 }}>Thông tin truy xuất món ăn</h3><p className="panel-kicker">Mỗi món cần có nguồn nguyên liệu và mã lô trước khi tạo phiếu.</p></div><FileText size={16} color="hsl(17 91% 52%)" /></div>
-          {items.length === 0 ? <div className="empty-state"><FileText size={24} /><div>Thêm món để nhập thông tin truy xuất</div></div> : <div className="order-items">{dispatch.traceability.map((trace) => <div className="order-item-row" key={trace.id}><div><strong>{trace.dish}</strong><span className="subtext">Thông tin truy xuất</span></div><div className="field"><label className="field-label">Nguồn nguyên liệu</label><input className="input" value={trace.origin} onChange={(event) => updateTraceability(trace.id, { origin: event.target.value })} placeholder="Tên nhà cung cấp" data-testid={`input-manual-trace-origin-${trace.id}`} /></div><div className="field"><label className="field-label">Mã lô món</label><input className="input" value={trace.lotCode} onChange={(event) => updateTraceability(trace.id, { lotCode: event.target.value })} placeholder="Mã lô" data-testid={`input-manual-trace-lot-${trace.id}`} /></div></div>)}</div>}
         </section>
         {formError && <div className="sample-warning dispatch-error" role="alert"><AlertCircle size={16} /><div><strong>Chưa thể tạo đơn hàng &amp; phiếu xuất</strong><span>{formError}</span></div></div>}
         <div className="detail-actions"><button type="button" className="button button-quiet" onClick={onCancel} data-testid="button-cancel-manual-order">Hủy</button><button type="submit" className="button button-primary" disabled={items.length === 0} data-testid="button-save-manual-order"><Check size={14} /> Tạo đơn hàng &amp; phiếu xuất</button></div>
