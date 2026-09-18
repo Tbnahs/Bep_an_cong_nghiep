@@ -368,6 +368,16 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
 .badge-source-b { color: hsl(var(--orange-deep)); background: hsl(var(--orange-soft)); }
 .price-readonly { height: 36px; display: flex; align-items: center; padding: 0 10px; border-radius: 7px; background: hsl(var(--surface-soft)); color: hsl(var(--orange-deep)); font-size: 12px; font-weight: 800; }
 .order-detail-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .72fr); gap: 16px; align-items: start; }
+.order-detail-form { display: grid; gap: 16px; max-width: 1120px; }
+.order-detail-form .readonly-grid { grid-template-columns: repeat(3, 1fr); }
+.order-items-table .order-item-row { grid-template-columns: minmax(220px, 1.4fr) .8fr 1fr; }
+.order-items-table .order-item-row > span { font-size: 11px; }
+.order-final-actions { max-width: 1120px; }
+.signature-pad-wrap { display: grid; gap: 6px; }
+.signature-pad { position: relative; min-height: 132px; overflow: hidden; border: 1px dashed hsl(var(--border)); border-radius: 8px; background: repeating-linear-gradient(0deg, hsl(var(--surface-soft)), hsl(var(--surface-soft)) 31px, hsl(var(--border) / .55) 32px); }
+.signature-pad canvas { display: block; width: 100%; height: 132px; touch-action: none; cursor: crosshair; }
+.signature-hint { position: absolute; inset: 0; display: grid; place-items: center; color: hsl(var(--muted-foreground) / .68); font-size: 12px; pointer-events: none; }
+.signature-clear { justify-self: end; font-size: 10px; }
 .order-items { border: 1px solid hsl(var(--border)); border-radius: 8px; overflow: hidden; }
 .order-item-head, .order-item-row { display: grid; grid-template-columns: minmax(220px, 1.4fr) .8fr 1fr; gap: 14px; align-items: center; }
 .order-item-head { padding: 10px 12px; color: hsl(var(--muted-foreground)); background: hsl(var(--surface-soft)); font-size: 10px; font-weight: 800; }
@@ -453,6 +463,7 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
   .form-span-2 { grid-column: span 2; }
   .form-span-3 { grid-column: span 2; }
   .order-detail-grid { grid-template-columns: 1fr; }
+  .order-detail-form .readonly-grid { grid-template-columns: repeat(2, 1fr); }
   .sample-editor-grid { grid-template-columns: 1fr 1fr; }
   .sample-note-field { grid-column: span 2; }
 }
@@ -478,6 +489,7 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
   .sample-editor { margin-left: 12px; }
   .sample-editor-grid { grid-template-columns: 1fr; }
   .sample-note-field { grid-column: span 1; }
+  .order-detail-form .readonly-grid { grid-template-columns: 1fr; }
   .sample-viewer-backdrop { padding: 8px; }
   .sample-viewer { max-height: 96vh; border-radius: 12px; }
   .sample-viewer-header, .sample-viewer-scroll, .sample-viewer-footer { padding-left: 15px; padding-right: 15px; }

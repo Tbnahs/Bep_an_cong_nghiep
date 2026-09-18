@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent, PointerEvent } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import {
   ArrowLeft,
@@ -80,6 +80,7 @@ export type SampleInfo = {
 
 export type OrderRecord = {
   id: string;
+  orderCode?: string;
   customerId: string;
   customer: string;
   customerType?: CustomerType;
@@ -121,6 +122,94 @@ export type DispatchDetails = {
   traceability: TraceabilityItem[];
   exportedAt: string;
 };
+
+function SignaturePad({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+
+  const drawFromValue = (canvas: HTMLCanvasElement, image: string) => {
+    if (!image) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const saved = new Image();
+    saved.onload = () => context.drawImage(saved, 0, 0, canvas.width, canvas.height);
+    saved.src = image;
+  };
+
+  const getPoint = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const bounds = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - bounds.left) * (canvas.width / bounds.width),
+      y: (event.clientY - bounds.top) * (canvas.height / bounds.height),
+    };
+  };
+
+  const startDrawing = (event: PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.setPointerCapture(event.pointerId);
+    const point = getPoint(event);
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    drawingRef.current = true;
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+  };
+
+  const draw = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
+    const point = getPoint(event);
+    context.lineWidth = 2.5;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = 'hsl(224 27% 17%)';
+    context.lineTo(point.x, point.y);
+    context.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    const canvas = canvasRef.current;
+    if (canvas) onChange(canvas.toDataURL('image/png'));
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  };
+
+  return (
+    <div className="signature-pad-wrap">
+      <div className="signature-pad">
+        <canvas
+          ref={(canvas) => {
+            canvasRef.current = canvas;
+            if (canvas) drawFromValue(canvas, value);
+          }}
+          width={720}
+          height={190}
+          onPointerDown={startDrawing}
+          onPointerMove={draw}
+          onPointerUp={stopDrawing}
+          onPointerCancel={stopDrawing}
+          aria-label="Ô ký tên trực tiếp"
+          data-testid="signature-pad"
+        />
+        {!value && <span className="signature-hint">Ký tên tại đây</span>}
+      </div>
+      <button type="button" className="text-button signature-clear" onClick={clear} disabled={!value} data-testid="button-clear-signature">Xóa chữ ký</button>
+    </div>
+  );
+}
 
 export type CreateDispatchSlipInput = {
   orderCode: string;
@@ -299,8 +388,6 @@ const dailyMenu = [
   { dish: 'Trứng gà', meal: 'Bữa trưa', available: 520, sampleStatus: 'Đã lưu' as const },
   { dish: 'Trái cây theo mùa', meal: 'Bữa xế', available: 300, sampleStatus: 'Đã lưu' as const },
 ];
-const mealOptions = ['Bữa sáng', 'Bữa trưa', 'Bữa xế', 'Bữa tối'];
-
 const readStorage = <T,>(key: string, fallback: T): T => {
   try {
     const value = window.localStorage.getItem(key);
@@ -461,9 +548,7 @@ function SourceBadge({ source }: { source: OrderSource }) {
 function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[]; onSave: (order: OrderRecord) => void; onCancel: () => void }) {
   const [customerId, setCustomerId] = useState('');
   const [customerType, setCustomerType] = useState<CustomerType>(customers[0]?.type ?? 'Trường học');
-  const customerOptions = useMemo(() => customers.filter((item) => item.type === customerType), [customers, customerType]);
-  const selected = customers.find((item) => item.id === customerId);
-  const [selectedMeals, setSelectedMeals] = useState<string[]>([]);
+  const [customerName, setCustomerName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -486,23 +571,9 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
   });
   const [formError, setFormError] = useState('');
   const generatedLotCode = batchCodeFor(deliveryDate, 1);
-  const meal = selectedMeals.join(' + ');
-  const toggleMeal = (nextMeal: string) => {
-    if (selectedMeals.includes(nextMeal)) {
-      if (items.some((item) => item.meal === nextMeal)) {
-        setFormError(`Vui lòng xóa các món thuộc ${nextMeal} trước khi bỏ chọn buổi ăn.`);
-        return;
-      }
-      setSelectedMeals((current) => current.filter((item) => item !== nextMeal));
-    } else {
-      setSelectedMeals((current) => [...current, nextMeal]);
-    }
-    setSelectedDish('');
-    setFormError('');
-  };
   const addDish = () => {
     const menuItem = dailyMenu.find((item) => item.dish === selectedDish);
-    if (!menuItem || !selectedMeals.includes(menuItem.meal) || items.some((item) => item.dish === menuItem.dish)) return;
+    if (!menuItem || items.some((item) => item.dish === menuItem.dish)) return;
     const item: OrderItem = {
       id: `oi-${Date.now()}-${items.length}`,
       dish: menuItem.dish,
@@ -531,43 +602,41 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!customerId || !selected || !meal || !deliveryDate || !deliveryTime || !deliveryAddress.trim() || items.length === 0 || items.some((item) => item.requestedQuantity < 1)) {
+    if (!customerName.trim() || !deliveryDate || !deliveryTime || !deliveryAddress.trim() || items.length === 0 || items.some((item) => item.requestedQuantity < 1)) {
       setFormError('Vui lòng bổ sung đầy đủ thông tin đơn hàng và số suất cho từng món.');
       return;
     }
-    const exportedDispatch: DispatchDetails = {
+    const draftDispatch: DispatchDetails = {
       ...dispatch,
       deliveryAddress: deliveryAddress.trim(),
       lotCode: generatedLotCode,
       traceability: traceabilityForItems(items, deliveryDate),
-      exportedAt: new Date().toISOString(),
+      exportedAt: '',
     };
-    const missing: string[] = [];
-    if (!exportedDispatch.exporterName.trim()) missing.push('Tên người xuất');
-    if (!exportedDispatch.vehicleType.trim()) missing.push('Loại xe');
-    if (!exportedDispatch.vehiclePlate.trim()) missing.push('Biển số xe');
-    if (!exportedDispatch.receiver.trim()) missing.push('Người nhận');
-    if (!exportedDispatch.signature.trim()) missing.push('Chữ ký / người ký');
-    if (missing.length) {
-      setFormError(`Chưa thể tạo phiếu xuất. Vui lòng bổ sung: ${missing.join(', ')}.`);
+    const missingDispatch: string[] = [];
+    if (!draftDispatch.exporterName.trim()) missingDispatch.push('Tên người giao hàng');
+    if (!draftDispatch.vehicleType.trim()) missingDispatch.push('Phương tiện');
+    if (!draftDispatch.vehiclePlate.trim()) missingDispatch.push('Biển số xe');
+    if (!draftDispatch.signature.trim()) missingDispatch.push('Chữ ký');
+    if (missingDispatch.length) {
+      setFormError(`Vui lòng bổ sung thông tin vận chuyển: ${missingDispatch.join(', ')}.`);
       return;
     }
-    const amount = items.reduce((sum, item) => sum + item.supplierQuantity, 0);
     const order: OrderRecord = {
       id: `DH-${today.replaceAll('-', '').slice(2)}-${String(Date.now()).slice(-3)}`,
-      customerId: selected.id,
-      customer: selected.name,
-      customerType: selected.type,
+      customerId,
+      customer: customerName.trim(),
+      customerType,
       source: 'B',
       menu: items.map((item) => item.dish).join(' · '),
-      meal,
+      meal: items.map((item) => item.meal).join(' + '),
       deliveryDate,
       deliveryTime,
       deliveryAddress: deliveryAddress.trim(),
-      status: 'Đã xuất hàng',
-      unitPrice: selected.unitPrice,
+      status: 'Chờ xác nhận',
+      unitPrice: 0,
       changeRequest: note.trim() || undefined,
-      dispatch: exportedDispatch,
+      dispatch: draftDispatch,
       createdAt: new Date().toISOString(),
       items,
     };
@@ -576,15 +645,14 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
   return (
     <main className="content-wrap">
        <div className="page-heading detail-heading">
-         <div><Link href="/quan-ly-don-hang" className="back-link" data-testid="link-back-orders"><ArrowLeft size={14} /> Danh sách đơn hàng</Link><h1>Tạo đơn hàng &amp; phiếu xuất</h1><p className="page-subtitle">Nhập một lần để tạo đơn hàng và hoàn tất phiếu xuất ngay.</p></div>
+          <div><Link href="/quan-ly-don-hang" className="back-link" data-testid="link-back-orders"><ArrowLeft size={14} /> Danh sách đơn hàng</Link><h1>Tạo đơn hàng thủ công</h1><p className="page-subtitle">Tự nhập đầy đủ thông tin đơn hàng, món ăn và vận chuyển.</p></div>
       </div>
        <form className="workflow-form" onSubmit={submit}>
         <section className="panel">
           <div className="panel-header"><div><h2 className="panel-heading">① Thông tin đơn hàng</h2><p className="panel-kicker">Thông tin khách hàng và lịch giao cho đơn tạo trực tiếp.</p></div><span className="badge badge-source-b"><Pencil size={12} /> Tạo thủ công</span></div>
            <div className="form-grid-3">
               <div className="field"><label className="field-label" htmlFor="manual-customer-type">Loại khách hàng</label><select id="manual-customer-type" className="select" value={customerType} onChange={(event) => { const nextType = event.target.value as CustomerType; setCustomerType(nextType); setCustomerId(''); setDeliveryAddress(''); updateDispatch({ deliveryAddress: '' }); }} data-testid="select-manual-customer-type"><option>Trường học</option><option>Bệnh viện</option><option>Công ty</option><option>Khác</option></select></div>
-              <div className="field form-span-2"><label className="field-label" htmlFor="manual-customer">{customerType === 'Trường học' ? 'Tên trường học' : customerType === 'Bệnh viện' ? 'Tên bệnh viện' : 'Tên khách hàng'}</label><select id="manual-customer" className="select" value={customerId} onChange={(event) => { const nextCustomer = customerOptions.find((item) => item.id === event.target.value); const nextAddress = nextCustomer?.deliveryAddress ?? ''; setCustomerId(event.target.value); setDeliveryAddress(nextAddress); updateDispatch({ deliveryAddress: nextAddress }); }} required data-testid="select-manual-customer"><option value="">Chọn {customerType === 'Trường học' ? 'trường học' : customerType === 'Bệnh viện' ? 'bệnh viện' : 'khách hàng'}</option>{customerOptions.map((customer) => <option value={customer.id} key={customer.id}>{customer.name}</option>)}</select>{customerOptions.length === 0 && <span className="subtext">Chưa có hồ sơ {customerType.toLowerCase()} trong Quản lý khách hàng.</span>}</div>
-              <div className="field form-span-2"><span className="field-label">Buổi ăn <small>(có thể chọn nhiều)</small></span><details className="meal-dropdown"><summary className="select" data-testid="select-manual-meals">{selectedMeals.length ? meal : 'Chọn buổi ăn'}</summary><div className="meal-dropdown-menu" role="group" aria-label="Chọn buổi ăn">{mealOptions.map((option) => { const checked = selectedMeals.includes(option); const optionId = `manual-meal-${option.toLowerCase().replaceAll(' ', '-')}`; return <label className="meal-dropdown-option" htmlFor={optionId} key={option}><input id={optionId} type="checkbox" checked={checked} onChange={() => toggleMeal(option)} data-testid={`checkbox-${optionId}`} /><span>{option}</span>{checked && <Check size={13} />}</label>; })}</div></details><span className="subtext">{selectedMeals.length ? `Đã chọn: ${meal}` : 'Chọn ít nhất một buổi ăn cho đơn hàng'}</span></div>
+               <div className="field form-span-2"><label className="field-label" htmlFor="manual-customer">{customerType === 'Trường học' ? 'Tên trường học' : customerType === 'Bệnh viện' ? 'Tên bệnh viện' : 'Tên khách hàng'}</label><input id="manual-customer" className="input" value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCustomerId(''); }} placeholder={`Nhập ${customerType === 'Trường học' ? 'tên trường học' : customerType === 'Bệnh viện' ? 'tên bệnh viện' : 'tên khách hàng'}`} required data-testid="input-manual-customer" /></div>
             <div className="field"><label className="field-label" htmlFor="manual-date">Ngày giao</label><input id="manual-date" type="date" className="input" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} required data-testid="input-manual-date" /></div>
             <div className="field"><label className="field-label" htmlFor="manual-time">Giờ giao</label><input id="manual-time" type="time" className="input" value={deliveryTime} onChange={(event) => setDeliveryTime(event.target.value)} required data-testid="input-manual-time" /></div>
              <div className="field form-span-2"><label className="field-label" htmlFor="manual-address">Địa chỉ giao</label><input id="manual-address" className="input" value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Địa chỉ giao suất ăn" required data-testid="input-manual-address" /></div>
@@ -592,23 +660,21 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
           </div>
         </section>
          <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">② Món ăn trong phiếu xuất</h2><p className="panel-kicker">Chọn món từ thực đơn có sẵn và nhập số suất riêng cho từng món.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
-           <div className="add-dish-row"><select className="select" value={selectedDish} onChange={(event) => setSelectedDish(event.target.value)} aria-label="Chọn món có sẵn" data-testid="select-manual-dish"><option value="">{selectedMeals.length ? 'Chọn món có sẵn' : 'Chọn buổi ăn trước'}</option>{dailyMenu.filter((item) => selectedMeals.includes(item.meal)).map((item) => <option value={item.dish} key={item.dish} disabled={items.some((selectedItem) => selectedItem.dish === item.dish)}>{item.dish} · {item.meal} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu'}</option>)}</select><button type="button" className="button button-quiet" onClick={addDish} disabled={!selectedDish} data-testid="button-add-manual-dish"><Plus size={14} /> Thêm món</button></div>
-             {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món xuất</div><span>Chọn món ở trên để thêm vào các buổi ăn đã chọn.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.meal} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`quantity-${item.id}`} className="input" type="number" min="1" value={item.requestedQuantity} onChange={(event) => updateDishQuantity(item.id, event.target.value)} data-testid={`input-manual-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> Xem lưu mẫu</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={deliveryDate || today} onClose={() => setSampleOpenId(null)} />}</div>)}</div>}
+            <div className="panel-header"><div><h2 className="panel-heading">② Danh sách món</h2><p className="panel-kicker">Chọn món và nhập số lượng riêng cho từng món trong đơn.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+            <div className="add-dish-row"><select className="select" value={selectedDish} onChange={(event) => setSelectedDish(event.target.value)} aria-label="Chọn món có sẵn" data-testid="select-manual-dish"><option value="">Chọn món có sẵn</option>{dailyMenu.map((item) => <option value={item.dish} key={item.dish} disabled={items.some((selectedItem) => selectedItem.dish === item.dish)}>{item.dish} · {item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu'}</option>)}</select><button type="button" className="button button-quiet" onClick={addDish} disabled={!selectedDish} data-testid="button-add-manual-dish"><Plus size={14} /> Thêm món</button></div>
+             {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món</div><span>Chọn món ở trên để thêm vào đơn hàng.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`quantity-${item.id}`} className="input" type="number" min="1" value={item.requestedQuantity} onChange={(event) => updateDishQuantity(item.id, event.target.value)} data-testid={`input-manual-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> Xem lưu mẫu</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={deliveryDate || today} onClose={() => setSampleOpenId(null)} />}</div>)}</div>}
          </section>
         <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin xuất &amp; giao nhận</h2><p className="panel-kicker">Hoàn tất dữ liệu giao hàng; thông tin món ăn đã được ghi nhận trong hồ sơ lưu mẫu.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+            <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin vận chuyển</h2><p className="panel-kicker">Tự nhập người giao, phương tiện và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
           <div className="form-grid-3">
-            <div className="field"><label className="field-label" htmlFor="manual-dispatch-exporter">Tên người xuất</label><input id="manual-dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Họ và tên" data-testid="input-manual-dispatch-exporter" /></div>
-            <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-type">Loại xe</label><input id="manual-dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-manual-dispatch-vehicle-type" /></div>
-            <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-plate">Biển số xe</label><input id="manual-dispatch-vehicle-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" data-testid="input-manual-dispatch-vehicle-plate" /></div>
-            <div className="field"><label className="field-label" htmlFor="manual-dispatch-receiver">Người nhận</label><input id="manual-dispatch-receiver" className="input" value={dispatch.receiver} onChange={(event) => updateDispatch({ receiver: event.target.value })} placeholder="Họ và tên người nhận" data-testid="input-manual-dispatch-receiver" /></div>
-            <div className="field"><label className="field-label" htmlFor="manual-dispatch-signature">Chữ ký / người ký</label><input id="manual-dispatch-signature" className="input" value={dispatch.signature} onChange={(event) => updateDispatch({ signature: event.target.value })} placeholder="Tên người ký xác nhận" data-testid="input-manual-dispatch-signature" /></div>
-            <div className="field"><label className="field-label">Mã lô xuất · tự sinh</label><div className="lot-code-field mono">{generatedLotCode || 'Chọn ngày giao để sinh mã'}</div></div>
+             <div className="field"><label className="field-label" htmlFor="manual-dispatch-exporter">Tên người giao hàng</label><input id="manual-dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" data-testid="input-manual-dispatch-exporter" /></div>
+             <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-type">Phương tiện</label><input id="manual-dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-manual-dispatch-vehicle-type" /></div>
+             <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-plate">Biển số xe</label><input id="manual-dispatch-vehicle-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" data-testid="input-manual-dispatch-vehicle-plate" /></div>
+             <div className="field form-span-3"><span className="field-label">Chữ ký người giao hàng</span><SignaturePad value={dispatch.signature} onChange={(signature) => updateDispatch({ signature })} /></div>
           </div>
         </section>
-        {formError && <div className="sample-warning dispatch-error" role="alert"><AlertCircle size={16} /><div><strong>Chưa thể tạo đơn hàng &amp; phiếu xuất</strong><span>{formError}</span></div></div>}
-        <div className="detail-actions"><button type="button" className="button button-quiet" onClick={onCancel} data-testid="button-cancel-manual-order">Hủy</button><button type="submit" className="button button-primary" disabled={items.length === 0} data-testid="button-save-manual-order"><Check size={14} /> Tạo đơn hàng &amp; phiếu xuất</button></div>
+         {formError && <div className="sample-warning dispatch-error" role="alert"><AlertCircle size={16} /><div><strong>Chưa thể tạo đơn hàng</strong><span>{formError}</span></div></div>}
+         <div className="detail-actions"><button type="button" className="button button-quiet" onClick={onCancel} data-testid="button-cancel-manual-order">Hủy bỏ</button><button type="submit" className="button button-primary" disabled={items.length === 0} data-testid="button-save-manual-order"><Check size={14} /> Tạo đơn hàng</button></div>
       </form>
     </main>
   );
@@ -628,24 +694,7 @@ export function OrderManagement({ createSlip }: { createSlip: (input: CreateDisp
     return (!search || query.includes(search.toLowerCase())) && (source === 'Tất cả nguồn' || order.source === source) && (status === 'Tất cả trạng thái' || orderStatusLabel(order.status) === status);
   }), [orders, search, source, status]);
   if (params.id === 'moi') return <OrderForm customers={customers} onSave={(order) => {
-    const quantity = order.items.reduce((sum, item) => sum + item.supplierQuantity, 0);
-    const linkedSlipId = order.dispatch ? createSlip({
-      orderCode: order.id,
-      customer: order.customer,
-      date: order.deliveryDate,
-      dispatchAt: `${order.deliveryDate}T${order.deliveryTime}:00`,
-      meal: order.meal,
-      quantity,
-      amount: quantity * order.unitPrice,
-      status: 'Đã xuất hàng',
-      sender: order.dispatch.exporterName,
-      receiver: order.dispatch.receiver,
-      vehicle: `${order.dispatch.vehicleType} · ${order.dispatch.vehiclePlate}`,
-      lotCode: order.dispatch.lotCode,
-      ingredients: order.dispatch.traceability.map((item) => ({ name: item.dish, origin: item.origin, lotCode: item.lotCode })),
-    }) : undefined;
-    const completedOrder = linkedSlipId ? { ...order, linkedSlipId } : order;
-    saveOrders([completedOrder, ...orders]);
+    saveOrders([order, ...orders]);
     setLocation(`/quan-ly-don-hang/${order.id}`);
   }} onCancel={() => setLocation('/quan-ly-don-hang')} />;
   if (params.id) {
@@ -753,81 +802,103 @@ function DispatchQr({ order, dispatch, onQrModeChange }: { order: OrderRecord; d
 function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { order?: OrderRecord; customer?: CustomerRecord; batchCode: string; onUpdate: (order: OrderRecord) => void; createSlip: (input: CreateDispatchSlipInput) => string }) {
   const [, setLocation] = useLocation();
   const [draft, setDraft] = useState<OrderRecord | undefined>(order);
-  const [proposalOpen, setProposalOpen] = useState(false);
-  const [proposal, setProposal] = useState(order?.changeRequest ?? '');
-  const [dispatchOpen, setDispatchOpen] = useState(order?.source === 'B' || order?.status === 'Đã xuất hàng');
-  const [sampleOpenId, setSampleOpenId] = useState<string | null>(null);
-  const [replaceOpenId, setReplaceOpenId] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
   const [dispatchError, setDispatchError] = useState('');
-  const [dispatch, setDispatch] = useState<DispatchDetails>(() => {
-    const initial = createDispatchDraft(order, customer, batchCode);
-    return { ...initial, entryMode: initial.entryMode ?? (order?.source === 'A' ? 'preorder' : 'normal') };
-  });
+  const [dispatch, setDispatch] = useState<DispatchDetails>(() => createDispatchDraft(order, customer, batchCode));
+
   if (!draft) return <main className="content-wrap not-found"><div><ClipboardList size={30} color="hsl(17 91% 52%)" /><h1>Không tìm thấy đơn hàng</h1><button className="button button-primary" onClick={() => setLocation('/quan-ly-don-hang')} data-testid="button-back-orders">Về danh sách đơn hàng</button></div></main>;
+
   const isExported = draft.status === 'Đã xuất hàng';
-  const orderedQuantity = draft.items.reduce((sum, item) => sum + item.requestedQuantity, 0);
   const totalQuantity = draft.items.reduce((sum, item) => sum + item.supplierQuantity, 0);
-  const samplesReady = draft.items.length > 0 && draft.items.every((item) => sampleStatus(item) === 'Đã lưu');
-  const setQuantity = (id: string, value: string) => setDraft({ ...draft, items: draft.items.map((item) => item.id === id ? { ...item, supplierQuantity: Math.max(0, Number(value) || 0) } : item) });
-  const setQuality = (id: string, value: OrderItem['quality']) => setDraft({ ...draft, items: draft.items.map((item) => item.id === id ? { ...item, quality: value } : item) });
-  const saveQuantities = () => onUpdate(draft);
-  const replaceDish = (id: string, dish: string) => {
-    const current = draft.items.find((item) => item.id === id);
-    if (!current || !dish || dish === current.dish) return;
-    const replacement = dailyMenu.find((menuItem) => menuItem.dish === dish);
-    const updated: OrderRecord = { ...draft, items: draft.items.map((item) => item.id === id ? { ...item, dish, sampleStatus: replacement?.sampleStatus ?? 'Chưa lưu', sampleSavedAt: replacement?.sampleStatus === 'Đã lưu' ? '10:30' : '', sampleNote: '' } : item) };
-    setDraft(updated);
-     setDispatch((currentDispatch) => ({ ...currentDispatch, traceability: traceabilityForItems(updated.items, updated.deliveryDate) }));
-    onUpdate(updated);
-    setNotice(`Đã đổi món sang ${dish}.`);
-    window.setTimeout(() => setNotice(''), 3000);
+  const updateDispatch = (changes: Partial<DispatchDetails>) => {
+    setDispatch((current) => ({ ...current, ...changes }));
+    setDispatchError('');
   };
-  const sendProposal = () => { if (!proposal.trim() || isExported) return; const updated = { ...draft, status: 'Đề xuất thay đổi' as OrderStatus, changeRequest: proposal.trim() }; setDraft(updated); onUpdate(updated); setProposalOpen(false); };
-  const confirm = () => { if (isExported) return; const updated = { ...draft, status: 'Đã xác nhận' as OrderStatus }; setDraft(updated); onUpdate(updated); };
-  const updateDispatch = (changes: Partial<DispatchDetails>) => setDispatch((current) => ({ ...current, ...changes }));
   const completeDispatch = () => {
     const missing: string[] = [];
-    if (!dispatch.exporterName.trim()) missing.push('Tên người xuất');
-    if (!dispatch.deliveryAddress.trim()) missing.push('Địa chỉ cần xuất');
-    if (!dispatch.vehicleType.trim()) missing.push('Loại xe');
+    if (!dispatch.exporterName.trim()) missing.push('Tên người giao hàng');
+    if (!dispatch.vehicleType.trim()) missing.push('Phương tiện');
     if (!dispatch.vehiclePlate.trim()) missing.push('Biển số xe');
-     if (!dispatch.receiver.trim()) missing.push('Người nhận');
-     if (!dispatch.signature.trim()) missing.push('Chữ ký / người ký');
-     if (!dispatch.lotCode.trim()) missing.push('Mã lô xuất');
-     const unsavedSamples = draft.items.filter((item) => sampleStatus(item) !== 'Đã lưu');
-     if (unsavedSamples.length) missing.push(`Lưu mẫu món: ${unsavedSamples.map((item) => item.dish).join(', ')}`);
-     if (missing.length) { setDispatchError(`Không thể xuất suất ăn. ${missing.join(', ')} chưa được bổ sung.`); return; }
-     setDispatchError('');
-    const exportedDispatch = { ...dispatch, exportedAt: new Date().toISOString() };
-    const linkedSlipId = createSlip({ orderCode: draft.id, customer: draft.customer, date: draft.deliveryDate, dispatchAt: `${draft.deliveryDate}T${draft.deliveryTime}:00`, meal: draft.meal, quantity: totalQuantity, amount: totalQuantity * draft.unitPrice, status: 'Đã xuất hàng', sender: exportedDispatch.exporterName, receiver: exportedDispatch.receiver, vehicle: `${exportedDispatch.vehicleType} · ${exportedDispatch.vehiclePlate}`, lotCode: exportedDispatch.lotCode, ingredients: exportedDispatch.traceability.map((item) => ({ name: item.dish, origin: item.origin, lotCode: item.lotCode })) });
-    const updated = { ...draft, status: 'Đã xuất hàng' as OrderStatus, linkedSlipId, dispatch: exportedDispatch };
+    if (!dispatch.signature.trim()) missing.push('Chữ ký');
+    if (missing.length) {
+      setDispatchError(`Vui lòng bổ sung: ${missing.join(', ')}.`);
+      return;
+    }
+    const orderCode = draft.orderCode ?? `DH-${draft.deliveryDate.replaceAll('-', '').slice(2)}-${String(Date.now()).slice(-3)}`;
+    const exportedDispatch: DispatchDetails = {
+      ...dispatch,
+      deliveryAddress: draft.deliveryAddress ?? customer?.deliveryAddress ?? '',
+      lotCode: dispatch.lotCode || batchCode,
+      traceability: traceabilityForItems(draft.items, draft.deliveryDate),
+      exportedAt: new Date().toISOString(),
+    };
+    const linkedSlipId = draft.linkedSlipId ?? createSlip({
+      orderCode,
+      customer: draft.customer,
+      date: draft.deliveryDate,
+      dispatchAt: `${draft.deliveryDate}T${draft.deliveryTime}:00`,
+      meal: draft.meal,
+      quantity: totalQuantity,
+      amount: totalQuantity * draft.unitPrice,
+      status: 'Đã xuất hàng',
+      sender: exportedDispatch.exporterName,
+      receiver: exportedDispatch.receiver,
+      vehicle: `${exportedDispatch.vehicleType} · ${exportedDispatch.vehiclePlate}`,
+      lotCode: exportedDispatch.lotCode,
+      ingredients: exportedDispatch.traceability.map((item) => ({ name: item.dish, origin: item.origin, lotCode: item.lotCode })),
+    });
+    const updated = { ...draft, orderCode, status: 'Đã xuất hàng' as OrderStatus, linkedSlipId, dispatch: exportedDispatch };
     setDispatch(exportedDispatch);
     setDraft(updated);
     onUpdate(updated);
   };
-  const changeQrMode = (mode: 'lot' | 'dish') => {
-    const updatedDispatch = { ...dispatch, qrMode: mode };
-    setDispatch(updatedDispatch);
-    if (isExported) onUpdate({ ...draft, dispatch: updatedDispatch });
-  };
-   const saveDispatchDraft = () => {
-     const updated = { ...draft, dispatch };
-     setDraft(updated);
-     onUpdate(updated);
-     setNotice('Đã lưu thông tin xuất dưới dạng nháp');
-     window.setTimeout(() => setNotice(''), 3000);
-   };
-   return <main className="content-wrap">
-       <div className="page-heading detail-heading"><div><Link href="/quan-ly-don-hang" className="back-link" data-testid="link-back-order-list"><ArrowLeft size={14} /> Danh sách đơn hàng</Link><div className="detail-title-line"><h1>Chi tiết đơn hàng</h1><OrderStatusBadge status={draft.status} /></div><p className="page-subtitle">Mã đơn <span className="mono">{draft.id}</span> · {draft.customer}</p></div><div className="action-row">{notice && <span className="save-status" data-testid="status-order-notice">{notice}</span>}</div></div>
-       <div className="order-detail-grid"><div className="detail-stack">
-        <section className="panel"><div className="panel-header"><div><h2 className="panel-heading">① Thông tin đơn hàng</h2><p className="panel-kicker">Thông tin đặt sẵn từ khách hàng · chỉ xem</p></div><SourceBadge source={draft.source} /></div><div className="readonly-grid"><div className="readonly-field"><span className="field-label">Mã đơn hàng</span><div className="readonly-value mono">{draft.id}</div></div><div className="readonly-field"><span className="field-label">Loại khách hàng</span><div className="readonly-value">{draft.customerType ?? customer?.type ?? 'Chưa cập nhật'}</div></div><div className="readonly-field"><span className="field-label">Khách hàng</span><div className="readonly-value">{draft.customer}</div></div><div className="readonly-field"><span className="field-label">Địa chỉ giao</span><div className="readonly-value">{draft.deliveryAddress || customer?.deliveryAddress || 'Chưa cập nhật'}</div></div><div className="readonly-field"><span className="field-label">Ngày giao</span><div className="readonly-value">{displayDate(draft.deliveryDate)}</div></div><div className="readonly-field"><span className="field-label">Giờ giao</span><div className="readonly-value"><Clock3 size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{draft.deliveryTime}</div></div><div className="readonly-field"><span className="field-label">Số lượng suất ăn</span><div className="readonly-value">{totalQuantity} suất</div></div><div className="readonly-field form-span-2"><span className="field-label">Ghi chú</span><div className="readonly-value">{draft.changeRequest || 'Không có ghi chú'}</div></div></div></section>
-       <section className="panel"><div className="panel-header"><div><h2 className="panel-heading">② Danh sách món xuất</h2><p className="panel-kicker">Kiểm tra lưu mẫu theo đúng ngày giao trước khi xác nhận xuất.</p></div><div className={`sample-count ${draft.items.some((item) => sampleStatus(item) !== 'Đã lưu') ? 'sample-count-warning' : ''}`}>{draft.items.filter((item) => sampleStatus(item) === 'Đã lưu').length}/{draft.items.length} món đủ điều kiện</div></div>{draft.items.some((item) => sampleStatus(item) !== 'Đã lưu') && !isExported && <div className="sample-warning"><AlertCircle size={16} /><div><strong>Có món chưa đủ điều kiện xuất</strong><span>{draft.items.filter((item) => sampleStatus(item) !== 'Đã lưu').length}/{draft.items.length} món chưa lưu mẫu trong ngày. Vui lòng đổi món trước khi xác nhận xuất.</span></div></div>}<div className="order-items"><div className="order-item-head"><span>Món ăn</span><span>Số lượng</span><span>Trạng thái lưu mẫu &amp; thao tác</span></div>{draft.items.map((item) => { const needsSample = sampleStatus(item) !== 'Đã lưu'; const alternatives = dailyMenu.filter((menuItem) => menuItem.meal === item.meal && menuItem.dish !== item.dish); return <div className="sample-order-block" key={item.id}><div className="order-item-row"><div><strong>{item.dish}</strong><span className="subtext">{item.meal}</span>{item.sampleNote && <span className="sample-note">{item.sampleNote}</span>}</div><div>{draft.source === 'A' && draft.status !== 'Đã xác nhận' && !isExported ? <div className="quantity-input"><input className="input" type="number" min="0" max={item.requestedQuantity} value={item.supplierQuantity} onChange={(event) => setQuantity(item.id, event.target.value)} data-testid={`input-supplier-quantity-${item.id}`} /><span>suất</span></div> : <div className="readonly-value">{item.supplierQuantity} suất</div>}</div><div><div className="sample-row-actions"><SampleStatusBadge status={sampleStatus(item)} />{sampleStatus(item) === 'Đã lưu' && <button className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-sample-${item.id}`}><Eye size={12} /> {sampleOpenId === item.id ? 'Đóng thông tin' : 'Xem lưu mẫu'}</button>}{needsSample && !isExported && <button className="text-button replace-button" onClick={() => setReplaceOpenId(item.id)} data-testid={`button-open-replace-${item.id}`}><Pencil size={12} /> Đổi món</button>}</div>{item.sampleSavedAt && <span className="subtext">Đã ghi nhận lúc {item.sampleSavedAt}</span>}</div></div>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={draft.deliveryDate} onClose={() => setSampleOpenId(null)} />}</div>; })}</div>{draft.source === 'A' && draft.status !== 'Đã xác nhận' && !isExported && <button className="button button-quiet" style={{ marginTop: 12 }} onClick={saveQuantities} data-testid="button-save-order-quantities"><Check size={13} /> Lưu số lượng</button>}</section>
-      {!isExported && draft.source === 'A' && <section className="panel proposal-panel"><div className="panel-header"><div><h2 className="panel-heading">Đổi món / trao đổi với khách</h2><p className="panel-kicker">Có thể gửi đề xuất hoặc tự gọi cho khách để thống nhất, không cần ràng buộc trong hệ thống.</p></div><Send size={17} color="hsl(17 91% 52%)" /></div>{draft.changeRequest && <div className="notice-box"><strong>Đề xuất đã ghi nhận</strong><span>{draft.changeRequest}</span></div>}{proposalOpen ? <div className="proposal-form"><textarea className="input textarea" value={proposal} onChange={(event) => setProposal(event.target.value)} placeholder="Ghi chú món cần đổi hoặc nội dung đã trao đổi..." data-testid="input-change-proposal" /><div className="action-row"><button className="button button-quiet" onClick={() => setProposalOpen(false)} data-testid="button-cancel-proposal">Hủy</button><button className="button button-primary" onClick={sendProposal} data-testid="button-send-proposal"><Send size={13} /> Lưu trao đổi</button></div></div> : <button className="button button-quiet" onClick={() => setProposalOpen(true)} data-testid="button-open-proposal"><Send size={13} /> Ghi chú đổi món</button>}</section>}
-       {replaceOpenId && <ReplaceDishDialog item={draft.items.find((item) => item.id === replaceOpenId) ?? draft.items[0]} alternatives={dailyMenu.filter((menuItem) => menuItem.meal === (draft.items.find((item) => item.id === replaceOpenId)?.meal ?? draft.meal) && menuItem.dish !== draft.items.find((item) => item.id === replaceOpenId)?.dish)} onReplace={(dish) => replaceDish(replaceOpenId, dish)} onClose={() => setReplaceOpenId(null)} />}
-      {isExported && <DispatchQr order={draft} dispatch={dispatch} onQrModeChange={changeQrMode} />}
-    </div><aside className="detail-stack"><section className="panel order-summary-panel"><div className="panel-header"><div><h2 className="panel-heading">Tóm tắt đơn hàng</h2><p className="panel-kicker">Một nơi để theo dõi từ lúc nhận đơn đến lúc giao.</p></div><CalendarDays size={17} color="hsl(17 91% 52%)" /></div><div className="summary-line"><span>Trạng thái</span><OrderStatusBadge status={draft.status} /></div><div className="summary-line"><span>Tổng số lượng</span><strong>{totalQuantity} suất</strong></div>{draft.dispatch && <><div className="summary-line"><span>Người xuất</span><strong>{draft.dispatch.exporterName}</strong></div><div className="summary-line"><span>Xe giao hàng</span><strong>{draft.dispatch.vehicleType} · {draft.dispatch.vehiclePlate}</strong></div><div className="summary-line"><span>Địa chỉ xuất</span><strong>{draft.dispatch.deliveryAddress}</strong></div></>}{!isExported && draft.status === 'Đã xác nhận' && !dispatchOpen && <div className="requirements" style={{ marginTop: 14 }}><strong><Clock3 size={14} style={{ verticalAlign: 'middle', marginRight: 5 }} />Sẵn sàng lập phiếu</strong><span>Bấm “Tiếp tục lập phiếu xuất” để thêm người xuất và thông tin giao nhận.</span></div>}{isExported && draft.linkedSlipId && <div className="success-box" style={{ marginTop: 14 }}><strong><CheckCircle2 size={15} style={{ verticalAlign: 'middle', marginRight: 5 }} />Đã lưu phiếu xuất</strong><span>{draft.linkedSlipId}</span></div>}</section></aside></div>
-  </main>;
+
+  return (
+    <main className="content-wrap">
+      <div className="page-heading detail-heading">
+        <div>
+          <Link href="/quan-ly-don-hang" className="back-link" data-testid="link-back-order-list"><ArrowLeft size={14} /> Danh sách đơn hàng</Link>
+          <div className="detail-title-line"><h1>Chi tiết đơn hàng</h1><OrderStatusBadge status={draft.status} /></div>
+          <p className="page-subtitle">{draft.source === 'A' ? 'Đơn đặt trước từ khách hàng' : 'Đơn tạo thủ công'} · {draft.customer}</p>
+        </div>
+      </div>
+      <div className="order-detail-form">
+        <section className="panel">
+          <div className="panel-header"><div><h2 className="panel-heading">① Thông tin đơn hàng</h2><p className="panel-kicker">Mã đơn hàng chỉ được sinh sau khi xuất hàng.</p></div><SourceBadge source={draft.source} /></div>
+          <div className="readonly-grid">
+            <div className="readonly-field"><span className="field-label">Mã đơn hàng</span><div className="readonly-value mono">{draft.orderCode ?? 'Chưa sinh mã đơn hàng'}</div></div>
+            <div className="readonly-field"><span className="field-label">Loại khách hàng</span><div className="readonly-value">{draft.customerType ?? customer?.type ?? 'Chưa cập nhật'}</div></div>
+            <div className="readonly-field"><span className="field-label">Tên khách hàng</span><div className="readonly-value">{draft.customer}</div></div>
+            <div className="readonly-field form-span-2"><span className="field-label">Địa chỉ</span><div className="readonly-value">{draft.deliveryAddress || customer?.deliveryAddress || 'Chưa cập nhật'}</div></div>
+            <div className="readonly-field"><span className="field-label">Ngày đặt</span><div className="readonly-value">{displayDate(draft.deliveryDate)}</div></div>
+            <div className="readonly-field"><span className="field-label">Tổng số suất</span><div className="readonly-value">{totalQuantity} suất</div></div>
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-header"><div><h2 className="panel-heading">② Danh sách món</h2><p className="panel-kicker">Danh sách món được tự điền theo đơn đặt hàng.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+          <div className="table-scroll order-detail-meal-scroll">
+            <table className="meal-table order-detail-meal-table">
+              <thead><tr><th>Tên món ăn</th><th>Số lượng</th><th>Bữa ăn</th></tr></thead>
+              <tbody>{draft.items.map((item) => <tr key={item.id}><td><strong>{item.dish}</strong></td><td>{item.supplierQuantity} suất</td><td>{item.meal}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin vận chuyển</h2><p className="panel-kicker">Nhập thông tin giao hàng và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+          <div className="form-grid-3">
+            <div className="field"><label className="field-label" htmlFor="order-exporter">Tên người giao hàng</label><input id="order-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" disabled={isExported} data-testid="input-order-exporter" /></div>
+            <div className="field"><label className="field-label" htmlFor="order-vehicle">Phương tiện</label><input id="order-vehicle" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" disabled={isExported} data-testid="input-order-vehicle" /></div>
+            <div className="field"><label className="field-label" htmlFor="order-plate">Biển số xe</label><input id="order-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" disabled={isExported} data-testid="input-order-plate" /></div>
+            <div className="field form-span-3"><span className="field-label">Chữ ký người giao hàng</span><SignaturePad value={dispatch.signature} onChange={(signature) => updateDispatch({ signature })} /></div>
+          </div>
+        </section>
+        {dispatchError && <div className="sample-warning dispatch-error" role="alert"><AlertCircle size={16} /><div><strong>Chưa thể xuất hàng</strong><span>{dispatchError}</span></div></div>}
+        <div className="detail-actions order-final-actions">
+          <button type="button" className="button button-quiet" onClick={() => setLocation('/quan-ly-don-hang')} data-testid="button-cancel-order">Hủy bỏ</button>
+          <button type="button" className="button button-primary" onClick={completeDispatch} disabled={isExported} data-testid="button-export-order"><Truck size={14} /> {isExported ? 'Đã xuất hàng' : 'Xuất hàng'}</button>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function LegacyOrderDetail({ order, onUpdate, createSlip }: { order?: OrderRecord; onUpdate: (order: OrderRecord) => void; createSlip: (input: CreateDispatchSlipInput) => string }) {
