@@ -346,8 +346,10 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
 .type-cell { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
 .address-cell { display: block; max-width: 215px; line-height: 1.45; }
 .manual-dish-list { display: grid; gap: 8px; }
-.manual-dish-item { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto 28px; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--surface-soft)); }
+.manual-dish-item { display: grid; grid-template-columns: minmax(0, 1fr) 110px 130px auto 28px; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--surface-soft)); }
 .manual-dish-item > div:first-child { min-width: 0; }
+.manual-dish-meal .field-label, .manual-dish-quantity .field-label { margin-bottom: 4px; }
+.manual-dish-meal .select { height: 32px; padding-left: 8px; padding-right: 22px; }
 .manual-dish-quantity .field-label { margin-bottom: 4px; }
 .manual-dish-quantity .quantity-input .input { height: 32px; }
 .manual-dish-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
@@ -473,9 +475,9 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
   .form-span-3 { grid-column: span 1; }
   .manual-dish-item { grid-template-columns: minmax(0, 1fr) 28px; }
   .manual-dish-item > div:first-child { grid-column: 1 / -1; }
-  .manual-dish-quantity { grid-column: 1; }
+  .manual-dish-meal, .manual-dish-quantity { grid-column: 1; }
   .manual-dish-actions { grid-column: 1; justify-content: flex-start; }
-  .manual-dish-item > .remove-row { grid-column: 2; grid-row: 2 / span 2; align-self: center; }
+  .manual-dish-item > .remove-row { grid-column: 2; grid-row: 2 / span 3; align-self: center; }
   .customer-stats, .order-stats { grid-template-columns: 1fr 1fr; }
   .customer-stats .stat-card.primary, .order-stats .stat-card.primary { grid-column: span 2; }
   .customer-filters, .order-filters { grid-template-columns: 1fr; }
