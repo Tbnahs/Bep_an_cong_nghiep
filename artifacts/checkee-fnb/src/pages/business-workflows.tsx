@@ -92,6 +92,7 @@ export type OrderRecord = {
   deliveryAddress?: string;
   status: OrderStatus;
   items: OrderItem[];
+  exportItems?: OrderItem[];
   exportItemIds?: string[];
   unitPrice: number;
   linkedSlipId?: string;
@@ -676,7 +677,7 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
           </div>
         </section>
          <section className="panel">
-             <div className="panel-header"><div><h2 className="panel-heading">② Danh sách xuất</h2><p className="panel-kicker">Chọn món từ danh sách hệ thống đã lưu mẫu để đưa vào đơn xuất.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+             <div className="panel-header"><div><h2 className="panel-heading">② Danh sách món</h2><p className="panel-kicker">Chọn món từ danh sách hệ thống đã lưu mẫu để đưa vào đơn xuất.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
              <div className="add-dish-row"><select className="select" value={selectedDish} onChange={(event) => setSelectedDish(event.target.value)} aria-label="Chọn món đã lưu mẫu" data-testid="select-manual-dish"><option value="">Chọn món đã lưu mẫu</option>{savedSampleMenu.map((item) => <option value={item.dish} key={item.dish} disabled={items.some((selectedItem) => selectedItem.dish === item.dish)}>{item.dish}</option>)}</select><button type="button" className="button button-quiet" onClick={addDish} disabled={!selectedDish} data-testid="button-add-manual-dish"><Plus size={14} /> Thêm món</button></div>
               {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món</div><span>Chọn món ở trên để thêm vào đơn hàng.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-meal"><label className="field-label" htmlFor={`meal-${item.id}`}>Buổi</label><select id={`meal-${item.id}`} className="select" value={mealOptionFor(item.meal)} onChange={(event) => updateDishMeal(item.id, event.target.value as MealOption)} data-testid={`select-manual-meal-${item.id}`}>{MEAL_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`quantity-${item.id}`} className="input" type="number" min="1" value={item.requestedQuantity} onChange={(event) => updateDishQuantity(item.id, event.target.value)} data-testid={`input-manual-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> Xem lưu mẫu</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={deliveryDate || today} onClose={() => setSampleOpenId(null)} />}</div>)}</div>}
          </section>
@@ -819,31 +820,57 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
   const [, setLocation] = useLocation();
   const [draft, setDraft] = useState<OrderRecord | undefined>(order);
   const [dispatchError, setDispatchError] = useState('');
+  const [selectedExportDish, setSelectedExportDish] = useState('');
   const [dispatch, setDispatch] = useState<DispatchDetails>(() => createDispatchDraft(order, customer, batchCode));
 
   if (!draft) return <main className="content-wrap not-found"><div><ClipboardList size={30} color="hsl(17 91% 52%)" /><h1>Không tìm thấy đơn hàng</h1><button className="button button-primary" onClick={() => setLocation('/quan-ly-don-hang')} data-testid="button-back-orders">Về danh sách đơn hàng</button></div></main>;
 
   const isExported = draft.status === 'Đã xuất hàng';
-  const exportItemIds = draft.exportItemIds ?? draft.items.map((item) => item.id);
-  const exportItems = draft.items.filter((item) => exportItemIds.includes(item.id));
+  const exportItems = draft.exportItems ?? draft.items.filter((item) => (draft.exportItemIds ? draft.exportItemIds.includes(item.id) : true) && sampleStatus(item) === 'Đã lưu');
+  const exportItemIds = exportItems.map((item) => item.id);
+  const availableExportDishes = savedSampleMenu.filter((menuItem) => !exportItems.some((item) => item.dish === menuItem.dish));
   const totalQuantity = exportItems.reduce((sum, item) => sum + item.supplierQuantity, 0);
   const updateDraft = (changes: Partial<OrderRecord>) => {
     const updated = { ...draft, ...changes };
     setDraft(updated);
     onUpdate(updated);
   };
-  const toggleExportItem = (id: string) => {
+  const addExportDish = () => {
     if (isExported) return;
-    const nextIds = exportItemIds.includes(id) ? exportItemIds.filter((itemId) => itemId !== id) : [...exportItemIds, id];
-    updateDraft({ exportItemIds: nextIds });
+    const menuItem = savedSampleMenu.find((item) => item.dish === selectedExportDish);
+    if (!menuItem || exportItems.some((item) => item.dish === menuItem.dish)) return;
+    const newItem: OrderItem = {
+      id: `export-${Date.now()}-${exportItems.length}`,
+      dish: menuItem.dish,
+      meal: menuItem.meal,
+      requestedQuantity: 1,
+      supplierQuantity: 1,
+      quality: 'Đạt',
+      sampleStatus: menuItem.sampleStatus,
+      sampleSavedAt: '10:30',
+    };
+    const nextItems = [...exportItems, newItem];
+    updateDraft({ exportItems: nextItems, exportItemIds: nextItems.map((item) => item.id) });
+    setSelectedExportDish('');
+    setDispatchError('');
+  };
+  const removeExportDish = (id: string) => {
+    if (isExported) return;
+    const nextItems = exportItems.filter((item) => item.id !== id);
+    updateDraft({ exportItems: nextItems, exportItemIds: nextItems.map((item) => item.id) });
+    setDispatchError('');
+  };
+  const updateExportMeal = (id: string, meal: MealOption) => {
+    if (isExported) return;
+    updateDraft({ exportItems: exportItems.map((item) => item.id === id ? { ...item, meal: `Bữa ${meal.toLowerCase()}` } : item) });
     setDispatchError('');
   };
   const updateExportQuantity = (id: string, value: string) => {
     if (isExported) return;
-    const currentItem = draft.items.find((item) => item.id === id);
+    const currentItem = exportItems.find((item) => item.id === id);
     if (!currentItem) return;
     const nextQuantity = Math.min(currentItem.requestedQuantity, Math.max(0, Number(value) || 0));
-    updateDraft({ items: draft.items.map((item) => item.id === id ? { ...item, supplierQuantity: nextQuantity } : item) });
+    updateDraft({ exportItems: exportItems.map((item) => item.id === id ? { ...item, supplierQuantity: nextQuantity } : item) });
     setDispatchError('');
   };
   const updateDispatch = (changes: Partial<DispatchDetails>) => {
@@ -919,12 +946,12 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
           </div>
         </section>
          <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">② {draft.source === 'A' ? 'Danh sách đặt' : 'Danh sách món'}</h2><p className="panel-kicker">{draft.source === 'A' ? 'Chọn những món trong đơn đặt trước cần xuất.' : 'Danh sách món được tự điền theo đơn hàng.'}</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
-           {draft.source === 'A' ? <div className="table-scroll order-detail-meal-scroll"><table className="meal-table order-detail-meal-table"><thead><tr><th>Chọn</th><th>Tên món ăn</th><th>Số lượng đặt</th><th>Buổi</th></tr></thead><tbody>{draft.items.map((item) => <tr key={item.id}><td><input type="checkbox" checked={exportItemIds.includes(item.id)} onChange={() => toggleExportItem(item.id)} disabled={isExported} aria-label={`Chọn ${item.dish} để xuất`} data-testid={`checkbox-export-item-${item.id}`} /></td><td><strong>{item.dish}</strong></td><td>{item.requestedQuantity} suất</td><td>{mealDisplay(item.meal)}</td></tr>)}</tbody></table></div> : <div className="table-scroll order-detail-meal-scroll"><table className="meal-table order-detail-meal-table"><thead><tr><th>Tên món ăn</th><th>Số lượng</th><th>Buổi</th></tr></thead><tbody>{draft.items.map((item) => <tr key={item.id}><td><strong>{item.dish}</strong></td><td>{item.supplierQuantity} suất</td><td>{mealDisplay(item.meal)}</td></tr>)}</tbody></table></div>}
+           {draft.source === 'A' ? <div className="table-scroll order-detail-meal-scroll"><table className="meal-table order-detail-meal-table"><thead><tr><th>Tên món ăn</th><th>Số lượng đặt</th><th>Buổi</th></tr></thead><tbody>{draft.items.map((item) => <tr key={item.id}><td><strong>{item.dish}</strong></td><td>{item.requestedQuantity} suất</td><td>{mealDisplay(item.meal)}</td></tr>)}</tbody></table></div> : <div className="table-scroll order-detail-meal-scroll"><table className="meal-table order-detail-meal-table"><thead><tr><th>Tên món ăn</th><th>Số lượng</th><th>Buổi</th></tr></thead><tbody>{draft.items.map((item) => <tr key={item.id}><td><strong>{item.dish}</strong></td><td>{item.supplierQuantity} suất</td><td>{mealDisplay(item.meal)}</td></tr>)}</tbody></table></div>}
          </section>
          {draft.source === 'A' && <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">③ Danh sách xuất</h2><p className="panel-kicker">Danh sách món sẽ được dùng để xuất hàng. Có thể chỉnh số suất trước khi xuất.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
-           {exportItems.length === 0 ? <div className="empty-state manual-dish-empty"><Truck size={24} /><div>Chưa có món xuất</div><span>Chọn món trong Danh sách đặt để thêm vào danh sách này.</span></div> : <div className="table-scroll order-detail-meal-scroll"><table className="meal-table order-detail-meal-table"><thead><tr><th>Tên món ăn</th><th>Buổi</th><th>Số suất xuất</th></tr></thead><tbody>{exportItems.map((item) => <tr key={item.id}><td><strong>{item.dish}</strong></td><td>{mealDisplay(item.meal)}</td><td><div className="quantity-input"><input className="input" type="number" min="1" max={item.requestedQuantity} value={item.supplierQuantity} onChange={(event) => updateExportQuantity(item.id, event.target.value)} disabled={isExported} data-testid={`input-export-quantity-${item.id}`} /><span>suất</span></div></td></tr>)}</tbody></table></div>}
+            <div className="panel-header"><div><h2 className="panel-heading">③ Danh sách xuất</h2><p className="panel-kicker">Chọn món từ danh sách hệ thống đã lưu mẫu để đưa vào phiếu xuất.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+            <div className="add-dish-row"><select className="select" value={selectedExportDish} onChange={(event) => setSelectedExportDish(event.target.value)} aria-label="Chọn món đã lưu mẫu để xuất" disabled={isExported} data-testid="select-detail-export-dish"><option value="">Chọn món đã lưu mẫu</option>{availableExportDishes.map((item) => <option value={item.dish} key={item.dish}>{item.dish}</option>)}</select><button type="button" className="button button-quiet" onClick={addExportDish} disabled={isExported || !selectedExportDish} data-testid="button-add-detail-export-dish"><Plus size={14} /> Thêm món</button></div>
+            {exportItems.length === 0 ? <div className="empty-state manual-dish-empty"><Truck size={24} /><div>Chưa có món xuất</div><span>Chọn món đã lưu mẫu ở trên để thêm vào danh sách xuất.</span></div> : <div className="manual-dish-list">{exportItems.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">Đã lưu mẫu</span></div><div className="manual-dish-meal"><label className="field-label" htmlFor={`detail-meal-${item.id}`}>Buổi</label><select id={`detail-meal-${item.id}`} className="select" value={mealOptionFor(item.meal)} onChange={(event) => updateExportMeal(item.id, event.target.value as MealOption)} disabled={isExported} data-testid={`select-detail-export-meal-${item.id}`}>{MEAL_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`detail-quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`detail-quantity-${item.id}`} className="input" type="number" min="1" value={item.supplierQuantity} onChange={(event) => updateExportQuantity(item.id, event.target.value)} disabled={isExported} data-testid={`input-export-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} /></div><button type="button" className="remove-row" onClick={() => removeExportDish(item.id)} disabled={isExported} aria-label={`Xóa ${item.dish} khỏi danh sách xuất`} data-testid={`button-remove-detail-export-dish-${item.id}`}><X size={13} /></button></div>)}</div>}
          </section>}
         <section className="panel">
            <div className="panel-header"><div><h2 className="panel-heading">{draft.source === 'A' ? '④' : '③'} Thông tin vận chuyển</h2><p className="panel-kicker">Nhập thông tin giao hàng và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
