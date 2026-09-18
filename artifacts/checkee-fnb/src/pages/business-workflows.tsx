@@ -34,6 +34,7 @@ export type CustomerRecord = {
   name: string;
   taxCode: string;
   contact: string;
+  phone?: string;
   deliveryAddress: string;
   allowedMenu: string;
   unitPrice: number;
@@ -130,7 +131,8 @@ const seedCustomers: CustomerRecord[] = [
     type: 'Trường học',
     name: 'Trường Tiểu học Nguyễn Bỉnh Khiêm',
     taxCode: '0302456812',
-    contact: 'Phạm Thị Hạnh · 0908 215 642',
+    contact: 'Phạm Thị Hạnh',
+    phone: '0908 215 642',
     deliveryAddress: '18 Nguyễn Bỉnh Khiêm, P. Đa Kao, Q. 1, TP. HCM',
     allowedMenu: 'Thực đơn trường học · Bữa trưa, bữa xế',
     unitPrice: 26000,
@@ -143,7 +145,8 @@ const seedCustomers: CustomerRecord[] = [
     type: 'Bệnh viện',
     name: 'Bệnh viện An Bình',
     taxCode: '0301597741',
-    contact: 'Lê Minh Quân · 0913 540 229',
+    contact: 'Lê Minh Quân',
+    phone: '0913 540 229',
     deliveryAddress: '146 An Bình, P. 7, Q. 5, TP. HCM',
     allowedMenu: 'Thực đơn bệnh viện · Suất thường, suất bệnh',
     unitPrice: 42000,
@@ -156,7 +159,8 @@ const seedCustomers: CustomerRecord[] = [
     type: 'Công ty',
     name: 'Công ty Phần mềm Sao Mai',
     taxCode: '0318074529',
-    contact: 'Nguyễn Hoàng Anh · 0987 321 408',
+    contact: 'Nguyễn Hoàng Anh',
+    phone: '0987 321 408',
     deliveryAddress: 'Tòa nhà RiverGate, 151 Bến Vân Đồn, Q. 4, TP. HCM',
     allowedMenu: 'Thực đơn văn phòng · Bữa trưa',
     unitPrice: 38000,
@@ -169,7 +173,8 @@ const seedCustomers: CustomerRecord[] = [
     type: 'Khác',
     name: 'Trung tâm đào tạo Á Châu',
     taxCode: '0311548830',
-    contact: 'Vũ Ngọc Lan · 0932 118 770',
+    contact: 'Vũ Ngọc Lan',
+    phone: '0932 118 770',
     deliveryAddress: '63 Lê Văn Sỹ, P. 13, Q. 3, TP. HCM',
     allowedMenu: 'Thực đơn sự kiện · Tea-break',
     unitPrice: 55000,
@@ -274,6 +279,7 @@ function CustomerForm({ initial, onSave, onCancel }: { initial?: CustomerRecord;
     name: '',
     taxCode: '',
     contact: '',
+    phone: '',
     deliveryAddress: '',
     allowedMenu: '',
     unitPrice: 0,
@@ -284,8 +290,8 @@ function CustomerForm({ initial, onSave, onCancel }: { initial?: CustomerRecord;
   const set = (key: keyof CustomerRecord, value: string | number) => setForm((current) => ({ ...current, [key]: value }));
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!form.name.trim() || !form.contact.trim() || !form.deliveryAddress.trim()) return;
-    onSave({ ...form, name: form.name.trim(), contact: form.contact.trim(), deliveryAddress: form.deliveryAddress.trim(), unitPrice: Number(form.unitPrice) || 0 });
+    if (!form.name.trim() || !form.contact.trim() || !form.phone?.trim() || !form.deliveryAddress.trim()) return;
+    onSave({ ...form, name: form.name.trim(), contact: form.contact.trim(), phone: form.phone.trim(), deliveryAddress: form.deliveryAddress.trim(), unitPrice: Number(form.unitPrice) || 0 });
   };
   const upload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -307,7 +313,8 @@ function CustomerForm({ initial, onSave, onCancel }: { initial?: CustomerRecord;
             <div className="field"><label className="field-label" htmlFor="customer-type">Loại khách hàng</label><select id="customer-type" className="select" value={form.type} onChange={(event) => set('type', event.target.value)} data-testid="select-customer-type"><option>Trường học</option><option>Bệnh viện</option><option>Công ty</option><option>Khác</option></select></div>
             <div className="field form-span-2"><label className="field-label" htmlFor="customer-name">Tên khách hàng</label><input id="customer-name" className="input" required value={form.name} onChange={(event) => set('name', event.target.value)} placeholder="Ví dụ: Trường Tiểu học Nguyễn Bỉnh Khiêm" data-testid="input-customer-name" /></div>
             <div className="field"><label className="field-label" htmlFor="customer-tax">Mã số thuế</label><input id="customer-tax" className="input" value={form.taxCode} onChange={(event) => set('taxCode', event.target.value)} placeholder="Mã số thuế" data-testid="input-customer-tax" /></div>
-            <div className="field"><label className="field-label" htmlFor="customer-contact">Người liên hệ</label><input id="customer-contact" className="input" required value={form.contact} onChange={(event) => set('contact', event.target.value)} placeholder="Họ tên · Số điện thoại" data-testid="input-customer-contact" /></div>
+            <div className="field"><label className="field-label" htmlFor="customer-contact">Người liên hệ</label><input id="customer-contact" className="input" required value={form.contact} onChange={(event) => set('contact', event.target.value)} placeholder="Họ và tên" data-testid="input-customer-contact" /></div>
+            <div className="field"><label className="field-label" htmlFor="customer-phone">Số điện thoại</label><input id="customer-phone" type="tel" className="input" required value={form.phone ?? ''} onChange={(event) => set('phone', event.target.value)} placeholder="0908 123 456" data-testid="input-customer-phone" /></div>
             <div className="field form-span-2"><label className="field-label" htmlFor="customer-address">Địa chỉ điểm giao</label><input id="customer-address" className="input" required value={form.deliveryAddress} onChange={(event) => set('deliveryAddress', event.target.value)} placeholder="Địa chỉ nhận suất ăn" data-testid="input-customer-address" /></div>
           </div>
         </section>
@@ -332,7 +339,7 @@ export function CustomerManagement() {
   const [type, setType] = useState('Tất cả loại');
   const [contract, setContract] = useState('Tất cả trạng thái');
   const filtered = useMemo(() => customers.filter((customer) => {
-    const query = `${customer.name} ${customer.taxCode} ${customer.contact}`.toLowerCase();
+    const query = `${customer.name} ${customer.taxCode} ${customer.contact} ${customer.phone ?? ''}`.toLowerCase();
     const state = contractState(customer.contractEnd).label;
     return (!search || query.includes(search.toLowerCase())) && (type === 'Tất cả loại' || customer.type === type) && (contract === 'Tất cả trạng thái' || state === contract);
   }), [customers, search, type, contract]);
@@ -378,7 +385,7 @@ export function CustomerManagement() {
       </section>
       <section className="table-card">
         <div className="table-toolbar"><div><h2 className="table-title">Danh sách khách hàng</h2><span className="table-note">{filtered.length} hồ sơ hiển thị</span></div><span className="table-note"><FileText size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Hợp đồng được lưu cùng hồ sơ</span></div>
-        <div className="table-scroll"><table className="data-table customer-table"><thead><tr><th>Khách hàng</th><th>Loại</th><th>Người liên hệ</th><th>Địa chỉ điểm giao</th><th>Thời hạn hợp đồng</th><th /></tr></thead><tbody>{filtered.length === 0 ? <tr><td colSpan={6}><div className="empty-state"><UsersRound size={25} style={{ marginBottom: 8 }} /><div>Không có khách hàng phù hợp</div></div></td></tr> : filtered.map((customer) => { const state = contractState(customer.contractEnd); return <tr key={customer.id} data-testid={`row-customer-${customer.id}`} className={state.label === 'Đã hết hạn' ? 'fail-row' : state.label === 'Sắp hết hạn' ? 'warn-row' : ''}><td><Link href={`/quan-ly-khach-hang/${customer.id}`} className="slip-link" data-testid={`link-customer-${customer.id}`}>{customer.name}</Link><span className="subtext mono">{customer.taxCode || 'Chưa cập nhật MST'}</span></td><td><span className="type-cell"><CustomerTypeIcon type={customer.type} />{customer.type}</span></td><td>{customer.contact}</td><td><span className="address-cell">{customer.deliveryAddress}</span></td><td><span className={`badge ${state.className}`}>{state.label === 'Còn hiệu lực' ? <CheckCircle2 size={12} /> : <Clock3 size={12} />}{state.label}</span><span className="subtext">{state.detail}</span>{customer.contractFile && <span className="subtext"><FileText size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{customer.contractFile}</span>}</td><td><div className="row-actions"><Link href={`/quan-ly-khach-hang/${customer.id}`} className="icon-button" aria-label={`Sửa ${customer.name}`} data-testid={`button-edit-customer-${customer.id}`}><Pencil size={14} /></Link><button className="icon-button" aria-label={`Xóa ${customer.name}`} onClick={() => remove(customer)} data-testid={`button-delete-customer-${customer.id}`}><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>
+       <div className="table-scroll"><table className="data-table customer-table"><thead><tr><th>Khách hàng</th><th>Loại</th><th>Người liên hệ</th><th>Số điện thoại</th><th>Địa chỉ điểm giao</th><th>Thời hạn hợp đồng</th><th /></tr></thead><tbody>{filtered.length === 0 ? <tr><td colSpan={7}><div className="empty-state"><UsersRound size={25} style={{ marginBottom: 8 }} /><div>Không có khách hàng phù hợp</div></div></td></tr> : filtered.map((customer) => { const state = contractState(customer.contractEnd); return <tr key={customer.id} data-testid={`row-customer-${customer.id}`} className={state.label === 'Đã hết hạn' ? 'fail-row' : state.label === 'Sắp hết hạn' ? 'warn-row' : ''}><td><Link href={`/quan-ly-khach-hang/${customer.id}`} className="slip-link" data-testid={`link-customer-${customer.id}`}>{customer.name}</Link><span className="subtext mono">{customer.taxCode || 'Chưa cập nhật MST'}</span></td><td><span className="type-cell"><CustomerTypeIcon type={customer.type} />{customer.type}</span></td><td>{customer.contact}</td><td>{customer.phone || <span className="subtext">Chưa cập nhật</span>}</td><td><span className="address-cell">{customer.deliveryAddress}</span></td><td><span className={`badge ${state.className}`}>{state.label === 'Còn hiệu lực' ? <CheckCircle2 size={12} /> : <Clock3 size={12} />}{state.label}</span><span className="subtext">{state.detail}</span>{customer.contractFile && <span className="subtext"><FileText size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{customer.contractFile}</span>}</td><td><div className="row-actions"><Link href={`/quan-ly-khach-hang/${customer.id}`} className="icon-button" aria-label={`Sửa ${customer.name}`} data-testid={`button-edit-customer-${customer.id}`}><Pencil size={14} /></Link><button className="icon-button" aria-label={`Xóa ${customer.name}`} onClick={() => remove(customer)} data-testid={`button-delete-customer-${customer.id}`}><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>
       </section>
     </main>
   );
