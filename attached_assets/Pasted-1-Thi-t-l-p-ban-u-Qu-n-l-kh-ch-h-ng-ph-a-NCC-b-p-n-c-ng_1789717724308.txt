@@ -1,0 +1,35 @@
+1. Thiết lập ban đầu — Quản lý khách hàng (phía NCC/bếp ăn công nghiệp)
+
+NCC tạo hồ sơ cho từng khách hàng (trường học/bệnh viện/công ty/khác): thông tin cơ bản (tên, mã số thuế, người liên hệ, địa chỉ điểm giao), điều kiện hợp đồng (loại thực đơn được phép cung cấp, đơn giá theo hợp đồng, thời hạn hợp đồng, file hợp đồng đính kèm). Đây là dữ liệu nền, tương ứng đối xứng với màn "Nguồn cung cấp" mà bên khách hàng cũng đang quản lý (khách hàng lưu hồ sơ NCC, NCC lưu hồ sơ khách hàng — 2 chiều).
+
+2. Phát sinh đơn hàng — có 2 nguồn khác nhau
+
+Nguồn A — Tự động từ hệ thống khách hàng (ví dụ trường học dùng iSchool):
+Khách hàng tự lên thực đơn theo tuần/tháng → khi đặt cho 1 ngày/buổi cụ thể, họ chọn 1 trong 3 hình thức: (a) tự nấu bằng nguyên liệu đặt + tồn kho, (b) đặt suất ăn hoàn chỉnh từ 1 NCC suất ăn, hoặc (c) lấy hoàn toàn từ kho có sẵn. Nếu chọn (b) — đặt suất ăn — họ chọn 1 NCC cụ thể từ danh sách đã có hợp đồng, bấm xác nhận → hệ thống tự sinh đơn hàng và đơn này lập tức xuất hiện bên phía NCC, không cần NCC làm gì để "kéo" dữ liệu về.
+
+Nguồn B — NCC tự tạo thủ công:
+Áp dụng khi khách hàng không dùng hệ thống (đặt qua điện thoại, email) — thường là công ty/bệnh viện đặt lẻ. NCC tự chọn khách hàng, thực đơn, buổi ăn, ngày giao, số lượng để tạo đơn tay. Đơn này mặc định có trạng thái "Đã xác nhận" luôn vì chính NCC nhập.
+
+Cả 2 nguồn đơn đều nằm chung trong 1 bảng "Đơn hàng cần xử lý" bên NCC, phân biệt bằng badge nguồn gốc.
+
+3. Xác nhận đơn (chỉ áp dụng với đơn từ Nguồn A — chưa xác nhận)
+
+NCC xem chi tiết đơn, với mỗi món ăn được phép sửa số lượng có thể cung ứng (không được tự sửa món ăn hay giờ giao khách yêu cầu — đó là dữ liệu của khách). Nếu cần đổi món/giờ giao, NCC phải gửi "Đề xuất thay đổi" ngược lại cho khách duyệt, không tự ý ghi đè. Sau khi xác nhận, hệ thống báo ngược cho khách hàng biết đã xác nhận bao nhiêu suất.
+
+4. Chuẩn bị & tạo phiếu xuất
+
+Khi đơn đã ở trạng thái "Đã xác nhận", NCC tạo phiếu xuất suất ăn — đây là bước quan trọng nhất vì phải khớp field 1:1 với màn "Nhập suất ăn" bên khách hàng (cùng tên: mã lô suất ăn, số lượng suất, số tiền trả, thời gian, người giao/người nhận, chứng từ hóa đơn) — vì bản chất đây là 1 bản ghi dữ liệu chung, chỉ khác góc nhìn nhập vào hay đối chiếu ra. Trong phiếu xuất còn có khối khai báo nguồn gốc nguyên liệu đầu vào để giữ chuỗi truy xuất không đứt đoạn.
+
+5. Sinh mã QR & giao hàng
+
+Sau khi xác nhận xuất hàng, hệ thống sinh 1 mã QR duy nhất gắn với mã lô (không nhồi hết dữ liệu vào mã, chỉ nhúng ID/link — để dữ liệu luôn cập nhật mới nhất khi quét). Mã QR này phục vụ 2 mục đích tùy người quét:
+
+Người trong hệ thống (nhân viên khách hàng) quét → mở thẳng form "Nhập suất ăn" đã điền sẵn dữ liệu, chỉ cần kiểm tra thực tế và xác nhận — không cần gõ tay lại.
+Người ngoài hệ thống (phụ huynh, cơ quan kiểm tra) quét bằng điện thoại thường → mở trang truy xuất nguồn gốc công khai, hiển thị timeline: suất ăn → nguyên liệu chính & NCC nguyên liệu → quy trình chế biến → kết quả kiểm tra chất lượng → thông tin đơn vị cung cấp.
+6. Khách hàng nhận & đánh giá
+
+Bên khách hàng quét/mở phiếu, đối chiếu thực tế, đánh giá từng món Đạt/Không đạt/Một phần, ký xác nhận người nhận. Trạng thái đơn chuyển thành "Khách hàng đã xác nhận nhận hàng". Nếu có món "Không đạt", NCC cần xử lý khiếu nại/giải trình.
+
+7. Đối soát & thanh toán
+
+Định kỳ (theo tuần/tháng), NCC tổng hợp toàn bộ phiếu xuất đã được khách xác nhận để đối chiếu công nợ, tính tổng tiền, theo dõi trạng thái thanh toán theo từng khách hàng riêng biệt.
