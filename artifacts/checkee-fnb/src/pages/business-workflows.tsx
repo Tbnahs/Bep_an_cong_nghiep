@@ -54,6 +54,7 @@ export type OrderItem = {
   meal: string;
   requestedQuantity: number;
   supplierQuantity: number;
+  quality?: 'Đạt' | 'Không đạt';
   sampleStatus?: 'Chưa lưu' | 'Đã lưu' | 'Không đạt';
   sampleSavedAt?: string;
   sampleNote?: string;
@@ -112,6 +113,7 @@ export type DispatchDetails = {
   vehicleType: string;
   vehiclePlate: string;
   lotCode: string;
+  attachmentName?: string;
   qrMode: 'lot' | 'dish';
   traceability: TraceabilityItem[];
   exportedAt: string;
@@ -504,6 +506,7 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
       meal: menuItem.meal,
       requestedQuantity: 1,
       supplierQuantity: 1,
+      quality: 'Đạt',
       sampleStatus: menuItem.sampleStatus,
       sampleSavedAt: menuItem.sampleStatus === 'Đã lưu' ? '10:30' : undefined,
     };
@@ -726,25 +729,55 @@ function ReplaceDishDialog({ item, alternatives, onReplace, onClose }: { item: O
   </div>;
 }
 
-function DispatchEditor({ dispatch, onChange, onSubmit, onCancel, canSubmit }: {
+function DispatchEditor({ dispatch, items, orderedQuantity, amount, onChange, onQuantityChange, onQualityChange, onSubmit, onCancel, canSubmit }: {
   dispatch: DispatchDetails;
+  items: OrderItem[];
+  orderedQuantity: number;
+  amount: number;
   onChange: (changes: Partial<DispatchDetails>) => void;
+  onQuantityChange: (id: string, value: string) => void;
+  onQualityChange: (id: string, value: OrderItem['quality']) => void;
   onSubmit: () => void;
   onCancel: () => void;
   canSubmit: boolean;
 }) {
+  const uploadAttachment = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (file) onChange({ attachmentName: file.name });
+  };
   return <section className="panel">
-    <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin xuất &amp; giao nhận</h2><p className="panel-kicker">Bổ sung thông tin giao hàng. Nguồn gốc món ăn đã có trong hồ sơ lưu mẫu.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
-    <div className="form-grid-3">
-      <div className="field"><label className="field-label" htmlFor="dispatch-exporter">Tên người xuất</label><input id="dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => onChange({ exporterName: event.target.value })} placeholder="Họ và tên" data-testid="input-dispatch-exporter" /></div>
-      <div className="field form-span-2"><label className="field-label" htmlFor="dispatch-address">Địa chỉ cần xuất</label><input id="dispatch-address" className="input" value={dispatch.deliveryAddress} onChange={(event) => onChange({ deliveryAddress: event.target.value })} placeholder="Địa chỉ giao suất ăn" data-testid="input-dispatch-address" /></div>
+    <div className="panel-header"><div><h2 className="panel-heading">③ Nhập suất ăn — Tất cả các buổi</h2><p className="panel-kicker">Đối chiếu số suất thực nhập theo từng buổi và chất lượng món ăn.</p></div><Utensils size={17} color="hsl(17 91% 52%)" /></div>
+    <div className="dispatch-entry-top">
+      <div className="field"><label className="field-label" htmlFor="dispatch-ordered-quantity">Số suất đã đặt</label><input id="dispatch-ordered-quantity" className="input" value={orderedQuantity} readOnly data-testid="input-dispatch-ordered-quantity" /></div>
+      <div className="field"><label className="field-label" htmlFor="dispatch-lot">Mã lô suất ăn <span className="required-mark">*</span></label><input id="dispatch-lot" className="input mono" value={dispatch.lotCode} onChange={(event) => onChange({ lotCode: event.target.value })} placeholder="Nhập mã lô suất ăn" required data-testid="input-dispatch-lot" /></div>
+    </div>
+    <div className="dispatch-meal-table" role="table" aria-label="Nhập số lượng suất ăn">
+      <div className="dispatch-meal-row dispatch-meal-head" role="row"><span>Buổi</span><span>Món ăn (theo thực đơn)</span><span>Chất lượng</span><span>Nhập số lượng</span></div>
+      {items.map((item) => <div className="dispatch-meal-row" role="row" key={item.id}>
+        <span>{item.meal}</span>
+        <strong>{item.dish}</strong>
+        <select className="select dispatch-quality-select" value={item.quality ?? 'Đạt'} onChange={(event) => onQualityChange(item.id, event.target.value as OrderItem['quality'])} aria-label={`Chất lượng ${item.dish}`} data-testid={`select-dispatch-quality-${item.id}`}><option>Đạt</option><option>Không đạt</option></select>
+        <div className="quantity-input"><input className="input" type="number" min="0" max={item.requestedQuantity} value={item.supplierQuantity} onChange={(event) => onQuantityChange(item.id, event.target.value)} aria-label={`Số lượng ${item.dish}`} data-testid={`input-dispatch-quantity-${item.id}`} /><span>suất</span></div>
+      </div>)}
+    </div>
+    <div className="dispatch-amount-row"><span>Số tiền phải trả</span><strong>{currency(amount)} VNĐ</strong></div>
+    <div className="dispatch-attachment">
+      <span className="field-label">Đính kèm ảnh giao nhận <small>(biên bản, ảnh suất ăn thực tế)</small></span>
+      {dispatch.attachmentName && <span className="subtext">{dispatch.attachmentName}</span>}
+      <label className="button button-quiet dispatch-upload-button" htmlFor="dispatch-attachment-upload" data-testid="button-upload-dispatch-attachment"><UploadCloud size={12} /> {dispatch.attachmentName ? 'Đổi ảnh lên' : 'Tải ảnh lên'}</label>
+      <input id="dispatch-attachment-upload" type="file" accept=".jpg,.jpeg,.png,.webp" onChange={uploadAttachment} hidden data-testid="input-dispatch-attachment" />
+    </div>
+    <div className="dispatch-people-grid">
+      <div className="field"><label className="field-label" htmlFor="dispatch-exporter">Người giao (NCC)</label><input id="dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => onChange({ exporterName: event.target.value })} placeholder="Nhập tên" data-testid="input-dispatch-exporter" /></div>
+      <div className="field"><label className="field-label" htmlFor="dispatch-receiver">Người nhận (nhà trường)</label><input id="dispatch-receiver" className="input" value={dispatch.receiver} onChange={(event) => onChange({ receiver: event.target.value })} placeholder="Nhập tên người nhận" data-testid="input-dispatch-receiver" /></div>
+    </div>
+    <div className="dispatch-extra-grid">
+      <div className="field"><label className="field-label" htmlFor="dispatch-address">Địa chỉ giao</label><input id="dispatch-address" className="input" value={dispatch.deliveryAddress} onChange={(event) => onChange({ deliveryAddress: event.target.value })} placeholder="Địa chỉ giao suất ăn" data-testid="input-dispatch-address" /></div>
       <div className="field"><label className="field-label" htmlFor="dispatch-vehicle-type">Loại xe</label><input id="dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => onChange({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-dispatch-vehicle-type" /></div>
       <div className="field"><label className="field-label" htmlFor="dispatch-vehicle-plate">Biển số xe</label><input id="dispatch-vehicle-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => onChange({ vehiclePlate: event.target.value })} placeholder="51D-000.00" data-testid="input-dispatch-vehicle-plate" /></div>
-      <div className="field"><label className="field-label" htmlFor="dispatch-receiver">Người nhận</label><input id="dispatch-receiver" className="input" value={dispatch.receiver} onChange={(event) => onChange({ receiver: event.target.value })} placeholder="Có thể bổ sung khi giao" data-testid="input-dispatch-receiver" /></div>
       <div className="field"><label className="field-label" htmlFor="dispatch-signature">Chữ ký / người ký</label><input id="dispatch-signature" className="input" value={dispatch.signature} onChange={(event) => onChange({ signature: event.target.value })} placeholder="Tên người ký xác nhận" data-testid="input-dispatch-signature" /></div>
-       <div className="field"><label className="field-label" htmlFor="dispatch-lot">Mã lô xuất · tự sinh</label><div id="dispatch-lot" className="lot-code-field mono" data-testid="input-dispatch-lot">{dispatch.lotCode || 'Chọn ngày giao để sinh mã'}</div></div>
     </div>
-      <div className="detail-actions"><button type="button" className="button button-quiet" onClick={onCancel} data-testid="button-save-dispatch-draft">Lưu nháp</button><button type="button" className="button button-primary" disabled={!canSubmit} onClick={onSubmit} data-testid="button-complete-dispatch"><Truck size={14} /> Tạo phiếu xuất &amp; xác nhận xuất</button></div>
+    <div className="detail-actions"><button type="button" className="button button-quiet" onClick={onCancel} data-testid="button-save-dispatch-draft">Lưu nháp</button><button type="button" className="button button-primary" disabled={!canSubmit} onClick={onSubmit} data-testid="button-complete-dispatch"><Truck size={14} /> Xác nhận nhập suất ăn</button></div>
   </section>;
 }
 
