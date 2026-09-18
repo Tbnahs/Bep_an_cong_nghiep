@@ -318,7 +318,7 @@ function Overview({ slips }: { slips: Slip[] }) {
         <div><p className="eyebrow">Điều phối hôm nay</p><h1>Phiếu xuất suất ăn</h1><p className="page-subtitle">Theo dõi tiến độ giao suất ăn và đối soát cùng khách hàng.</p></div>
         <div className="action-row">
           <button className="button button-quiet" onClick={exportReport} data-testid="button-export-report"><Download size={14} /> Xuất báo cáo</button>
-          <button className="button button-primary" onClick={() => setLocation('/phieu-xuat/PX-250814-01')} data-testid="button-open-due-slip"><Plus size={14} /> Tạo phiếu xuất</button>
+          <button className="button button-primary" onClick={() => setLocation('/quan-ly-don-hang/moi')} data-testid="button-open-due-slip"><Plus size={14} /> Tạo đơn hàng / phiếu xuất</button>
         </div>
       </div>
       <section className="stats-grid" aria-label="Tổng quan phiếu xuất">
@@ -443,20 +443,20 @@ function App() {
         customerShort: input.customer.length > 24 ? `${input.customer.slice(0, 24)}…` : input.customer,
         date: input.date,
         dispatchAt: input.dispatchAt,
-        status: 'Nháp',
+        status: input.status ?? 'Nháp',
         payment: 'Chưa thanh toán',
         meal: input.meal,
         quantity: input.quantity,
         amount: input.amount,
         quality: 'Đạt',
         note: 'Phiếu được tạo từ đơn hàng đã xác nhận',
-        lotCode: '',
+        lotCode: input.lotCode ?? '',
         documentName: '',
-        ingredientOrigin: '',
-        sender: '',
-        receiver: '',
-        vehicle: '',
-        ingredients: [
+        ingredientOrigin: input.ingredients?.[0]?.origin ?? '',
+        sender: input.sender ?? '',
+        receiver: input.receiver ?? '',
+        vehicle: input.vehicle ?? '',
+        ingredients: input.ingredients?.map((item, index) => ({ id: `${slipId}-i${index + 1}`, ...item })) ?? [
           { id: `${slipId}-i1`, name: '', origin: '', lotCode: '' },
           { id: `${slipId}-i2`, name: '', origin: '', lotCode: '' },
         ],

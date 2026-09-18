@@ -223,6 +223,12 @@ h1 { font-size: clamp(22px, 2.2vw, 29px); line-height: 1.15; letter-spacing: -.0
 .badge-fail { color: hsl(var(--rose)); background: hsl(var(--rose-soft)); }
 .warning-note { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; color: hsl(var(--amber)); font-size: 10px; font-weight: 700; }
 .empty-state { padding: 54px 20px; text-align: center; color: hsl(var(--muted-foreground)); }
+.daily-menu-list { display: grid; gap: 8px; }
+.daily-menu-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--surface-soft)); }
+.daily-menu-item.is-requested { border-color: hsl(var(--green) / .35); background: hsl(var(--green-soft) / .6); }
+.daily-menu-item > div:nth-child(2) { flex: 1; min-width: 0; }
+.daily-menu-check { width: 22px; height: 22px; display: grid; place-items: center; flex: 0 0 auto; color: hsl(var(--green)); border: 1px solid hsl(var(--border)); border-radius: 50%; background: hsl(var(--surface)); }
+.is-requested .daily-menu-check { border-color: hsl(var(--green) / .35); background: hsl(var(--green-soft)); }
 
 .detail-heading { align-items: center; }
 .back-link { display: inline-flex; align-items: center; gap: 5px; color: hsl(var(--muted-foreground)); text-decoration: none; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
