@@ -1,0 +1,400 @@
+LUỒNG QUẢN LÝ ĐƠN HÀNG & XUẤT SUẤT ĂN
+1. Trường hợp CÓ đơn đặt hàng
+Bước 1. Vào danh sách đơn hàng
+
+Đơn vị cung cấp suất ăn vào:
+
+Quản lý đơn hàng → Danh sách đơn hàng
+
+Danh sách hiển thị:
+
+Thông tin	Nội dung
+Mã đơn hàng	DH20260918-001
+Khách hàng	Trường ABC
+Ngày giao	18/09/2026
+Giờ giao	11:00
+Địa chỉ giao	...
+Số suất	500 suất
+Trạng thái	Chờ xuất / Đã xuất / Hoàn thành
+
+Có thể có nút:
+
+[Xem chi tiết]
+
+2. Chi tiết đơn hàng
+
+Khi bấm Xem chi tiết, hệ thống mở một màn hình duy nhất gồm các phần:
+
+A. Thông tin đơn hàng
+
+Các thông tin này được lấy sẵn từ đơn đặt hàng:
+
+Mã đơn hàng
+Khách hàng
+Ngày giao
+Giờ giao
+Địa chỉ giao
+Số lượng suất ăn
+Ghi chú
+B. Danh sách món ăn
+
+Ví dụ:
+
+STT	Món ăn	Số lượng	Trạng thái lưu mẫu	Thao tác
+1	Mì trộn hải sản	500	🟢 Đã lưu mẫu	Xem lưu mẫu
+2	Canh cải xanh	500	🔴 Chưa lưu mẫu	Đổi món
+3	Trứng gà	500	🟢 Đã lưu mẫu	Xem lưu mẫu
+
+Quan trọng: trạng thái này phải được hệ thống kiểm tra theo ngày xuất/ngày giao.
+
+3. Kiểm tra điều kiện được xuất
+
+Quy tắc nghiệp vụ:
+
+Món ăn chỉ được phép xuất khi món ăn đã thực hiện lưu mẫu trong ngày theo quy định của hệ thống.
+
+Trường hợp đã lưu mẫu
+
+Hiển thị:
+
+🟢 Đã lưu mẫu
+
+Cho phép:
+
+[Xem lưu mẫu]
+
+Trường hợp chưa lưu mẫu
+
+Hiển thị:
+
+🔴 Chưa lưu mẫu
+
+Không cho phép xuất món đó.
+
+Hiển thị:
+
+[Đổi món]
+
+Có thể thêm cảnh báo phía trên danh sách:
+
+⚠️ Có món ăn chưa lưu mẫu trong ngày. Các món này không được phép xuất đi. Vui lòng thực hiện đổi món trước khi xác nhận xuất.
+
+4. Xem thông tin lưu mẫu của từng món
+
+Đây là chỗ mình nghĩ nên tận dụng đúng giao diện “Lưu mẫu” mà bạn gửi, nhưng không nên điều hướng người dùng sang module khác.
+
+Khi bấm:
+
+[Xem lưu mẫu]
+
+→ mở Drawer/Popup “Thông tin lưu mẫu”.
+
+Ví dụ:
+
+Thông tin lưu mẫu – Mì trộn hải sản
+
+Thông tin món ăn
+
+Tên món: Mì trộn hải sản
+Mã truy vết: 1753402417699
+Loại thực đơn: Đặc (nấu chín)
+Ngày thực hiện: 18/09/2026
+Trạng thái: 🟢 Đã lưu mẫu
+Quy trình chế biến
+Đầu bếp: Đầu bếp Checkee
+Mã quy trình: MTHS-001
+Chế biến lúc: 10:30 18/09/2026
+Nguyên liệu
+
+Hiển thị chính các thông tin giống giao diện bạn gửi:
+
+Nguyên liệu	Nhà cung cấp	Số lô/mẻ	ĐVT
+Tôm sú	Công ty TNHH...	2025071008	Gram
+Cải thìa xanh	Khu A5-013...	2025070512	Kg
+Mì gói	Nhà cung cấp...	20250708	Gói
+Trứng gà	Chi nhánh...	2025070101	Quả
+
+Có thể thêm nút:
+
+[Đóng]
+
+👉 Như vậy cán bộ/người xuất không cần thoát khỏi đơn hàng, nhưng vẫn xem được đầy đủ thông tin lưu mẫu của từng món.
+
+5. Trường hợp món CHƯA lưu mẫu → Đổi món
+
+Đây là phần cần thiết kế rõ vì nó ảnh hưởng trực tiếp tới việc xuất.
+
+Khi bấm:
+
+[Đổi món]
+
+→ mở popup:
+
+Đổi món xuất
+
+Món hiện tại:
+Canh cải xanh
+
+Lý do:
+🔴 Chưa lưu mẫu trong ngày
+
+Chọn món thay thế:
+
+[Dropdown / danh sách các món]
+
+Chỉ nên cho chọn những món đáp ứng điều kiện được xuất, tức là đã lưu mẫu.
+
+Ví dụ:
+
+Mì trộn hải sản ✓
+Gà chiên ✓
+Cá kho ✓
+Canh cải xanh ✕ Chưa lưu mẫu
+Canh bí đỏ ✕ Chưa lưu mẫu
+
+Sau khi chọn:
+
+Món thay thế: Canh bí đỏ
+
+→ [Xác nhận đổi món]
+
+6. Cảnh báo trước khi xuất
+
+Đây là chốt nghiệp vụ rất quan trọng.
+
+Khi người dùng bấm:
+
+[Tạo phiếu xuất & xác nhận xuất]
+
+hệ thống kiểm tra lại toàn bộ danh sách món.
+
+Nếu còn món chưa lưu mẫu:
+
+Không cho tạo phiếu.
+
+Hiển thị:
+
+⚠️ Không thể xuất suất ăn.
+Có 01 món chưa đáp ứng điều kiện lưu mẫu trong ngày. Vui lòng đổi món hoặc hoàn tất lưu mẫu trước khi tiếp tục.
+
+Nếu tất cả món đều hợp lệ:
+
+Cho phép chuyển sang phần thông tin xuất/giao nhận.
+
+7. Gộp Đơn hàng + Phiếu xuất
+
+Thay vì:
+
+Đơn hàng → Tạo phiếu → Phiếu xuất
+
+mình đề xuất giao diện:
+
+CHI TIẾT ĐƠN HÀNG & XUẤT SUẤT ĂN
+
+Gồm 3 section:
+
+① Thông tin đơn hàng
+
+Thông tin đã đặt sẵn.
+
+② Danh sách món xuất
+
+Danh sách món + trạng thái lưu mẫu + đổi món.
+
+③ Thông tin xuất & giao nhận
+
+Người dùng nhập:
+
+Tên người xuất
+Địa chỉ xuất
+Loại xe
+Biển số xe
+Tên người nhận
+Mã lô xuất
+
+Trong đó:
+
+Mã lô xuất
+
+Tự động sinh, người dùng không nhập.
+
+Format:
+
+DDMMYYYY-XX
+
+Ví dụ:
+
+18092026-01
+
+Trong đó:
+
+18092026: ngày xuất
+01: lượt xuất trong ngày
+
+Ví dụ ngày 18/09/2026:
+
+Lượt xuất	Mã lô
+Lượt 1	18092026-01
+Lượt 2	18092026-02
+Lượt 3	18092026-03
+
+Lưu ý BA: nên quy định XX tăng theo số lượt xuất thành công trong ngày, không tăng khi người dùng chỉ mở/tạo nháp phiếu. Nếu tạo nháp rồi hủy thì không nên làm mất số thứ tự.
+
+8. Xác nhận xuất
+
+Cuối màn hình:
+
+[Lưu nháp]
+[Xác nhận xuất]
+
+Khi bấm Xác nhận xuất, hệ thống kiểm tra:
+
+Đơn hàng có tồn tại không.
+Danh sách món xuất đã được xác định.
+Tất cả món đều đáp ứng điều kiện lưu mẫu.
+Đã nhập đầy đủ thông tin người xuất.
+Đã nhập địa chỉ.
+Đã chọn loại xe.
+Đã nhập biển số.
+Đã có người nhận.
+Sinh mã lô xuất.
+
+Sau khi hợp lệ:
+
+Xuất suất ăn thành công
+
+Đơn chuyển trạng thái:
+
+Chờ xuất → Đã xuất
+
+9. Trường hợp KHÔNG CÓ đơn đặt hàng
+
+Trường hợp này không nên tạo một flow hoàn toàn khác.
+
+Nên dùng cùng một màn hình “Tạo lượt xuất”, chỉ khác là các thông tin đơn hàng không được fill sẵn.
+
+Luồng:
+
+Quản lý đơn hàng → Tạo lượt xuất
+
+Thông tin đơn hàng
+
+Các trường để trống:
+
+Khách hàng
+Ngày giao
+Giờ giao
+Địa chỉ giao
+Số lượng suất
+Ghi chú
+
+Người dùng tự nhập/chọn.
+
+Danh sách món xuất
+
+Người dùng:
+
+[+ Thêm món]
+
+→ chọn món.
+
+Sau khi chọn món, hệ thống ngay lập tức kiểm tra trạng thái lưu mẫu trong ngày.
+
+Ví dụ:
+
+Món	Số lượng	Lưu mẫu	Thao tác
+Mì trộn hải sản	300	🟢 Đã lưu mẫu	Xem
+Gà chiên	300	🟢 Đã lưu mẫu	Xem
+Canh cải xanh	300	🔴 Chưa lưu mẫu	Không được xuất
+
+Với món chưa lưu mẫu:
+
+🔴 Món ăn chưa được lưu mẫu trong ngày và không thể xuất.
+
+Có thể xóa món hoặc đổi sang món khác.
+
+10. Điểm mình đề xuất chỉnh trong UI
+
+Để người dùng không phải đọc quá nhiều thông tin, ở Danh sách món chỉ cần hiển thị:
+
+Món ăn | Số lượng | Trạng thái lưu mẫu | Thao tác
+
+Ví dụ:
+
+┌─────────────────────────────────────────┐
+│ DANH SÁCH MÓN XUẤT                      │
+│                                         │
+│ Mì trộn hải sản       500 suất          │
+│ 🟢 Đã lưu mẫu          [Xem lưu mẫu]     │
+│                                         │
+│ Canh cải xanh          500 suất         │
+│ 🔴 Chưa lưu mẫu        [Đổi món]        │
+│                                         │
+└─────────────────────────────────────────┘
+
+Và phía trên nên có thanh cảnh báo tổng quan:
+
+⚠ 1/3 món chưa đủ điều kiện xuất
+  Vui lòng đổi món trước khi xác nhận xuất.
+
+Khi tất cả hợp lệ:
+
+✓ 3/3 món đủ điều kiện xuất
+
+Cách này trực quan hơn việc bắt người dùng vào từng món mới biết món đó có được xuất hay không.
+
+11. Tổng luồng BA nên chốt
+CÓ ĐƠN ĐẶT HÀNG
+Danh sách đơn hàng
+        ↓
+Xem chi tiết đơn hàng
+        ↓
+Hiển thị sẵn thông tin khách hàng
+        ↓
+Hiển thị danh sách món đã đặt
+        ↓
+Kiểm tra lưu mẫu trong ngày
+        ↓
+ ┌───────────────┐
+ │               │
+Đã lưu        Chưa lưu
+ │               │
+ ↓               ↓
+Xem lưu mẫu    Đổi món
+ │               │
+ └───────┬───────┘
+         ↓
+Kiểm tra lại toàn bộ món
+         ↓
+Tất cả món đủ điều kiện?
+         ↓ Có
+Nhập thông tin xuất/giao nhận
+         ↓
+Tự sinh mã lô xuất
+         ↓
+Xác nhận xuất
+         ↓
+Đã xuất
+KHÔNG CÓ ĐƠN ĐẶT HÀNG
+Tạo lượt xuất
+      ↓
+Nhập thông tin khách hàng/giao nhận
+      ↓
+Thêm món
+      ↓
+Kiểm tra lưu mẫu trong ngày
+      ↓
+Đã lưu mẫu?
+ ┌──────────┴──────────┐
+ Có                    Không
+ ↓                      ↓
+Cho xuất              Không cho xuất
+ ↓                      ↓
+Xem lưu mẫu           Đổi/Xóa món
+ └──────────┬──────────┘
+            ↓
+Tất cả món đủ điều kiện
+            ↓
+Tự sinh mã lô xuất
+            ↓
+Xác nhận xuất
