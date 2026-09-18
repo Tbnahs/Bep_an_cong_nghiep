@@ -50,7 +50,7 @@ import { CustomerManagement, OrderManagement, type CreateDispatchSlipInput } fro
 const queryClient = new QueryClient();
 const STORAGE_KEY = 'checkee-fnb-slips-v1';
 
-type SlipStatus = 'Nháp' | 'Đã xuất hàng' | 'Khách hàng đã xác nhận';
+type SlipStatus = 'Nháp' | 'Chờ xuất' | 'Đã xuất hàng' | 'Khách hàng đã xác nhận';
 type Quality = 'Đạt' | 'Không đạt';
 
 type IngredientRow = {
@@ -95,7 +95,7 @@ const seedSlips: Slip[] = [
     customerShort: 'TH Nguyễn Bỉnh Khiêm',
     date: today,
     dispatchAt: isoHoursFromNow(1.5),
-    status: 'Nháp',
+    status: 'Chờ xuất',
     payment: 'Chưa thanh toán',
     meal: 'Bữa trưa',
     quantity: 486,
@@ -192,7 +192,8 @@ const seedSlips: Slip[] = [
 const getInitialSlips = (): Slip[] => {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) as Slip[] : seedSlips;
+    const slips = saved ? JSON.parse(saved) as Slip[] : seedSlips;
+    return slips.map((slip) => slip.id === 'PX-250814-01' ? { ...slip, status: 'Chờ xuất' } : slip);
   } catch {
     return seedSlips;
   }
@@ -202,10 +203,11 @@ const persistSlips = (slips: Slip[]) => {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(slips));
 };
 
+const isPendingSlip = (status: SlipStatus) => status === 'Nháp' || status === 'Chờ xuất';
 const currency = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
 const displayDate = (value: string) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
 const displayTime = (value: string) => new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
-const isDueSoon = (slip: Slip) => slip.status === 'Nháp' && new Date(slip.dispatchAt).getTime() - Date.now() < 2 * 3600000 && new Date(slip.dispatchAt).getTime() > Date.now();
+const isDueSoon = (slip: Slip) => isPendingSlip(slip.status) && new Date(slip.dispatchAt).getTime() - Date.now() < 2 * 3600000 && new Date(slip.dispatchAt).getTime() > Date.now();
 
 function SideNav({ currentPath, mobileOpen, onClose }: { currentPath: string; mobileOpen: boolean; onClose: () => void }) {
   const items = [
@@ -279,8 +281,8 @@ function AppShell({ children }: { children: ReactNode }) {
 }
 
 function StatusBadge({ status }: { status: SlipStatus }) {
-  const className = status === 'Nháp' ? 'badge-draft' : status === 'Đã xuất hàng' ? 'badge-exported' : 'badge-confirmed';
-  return <span className={`badge ${className}`} data-testid={`status-${status}`}>{status === 'Nháp' ? <Clock3 size={12} /> : status === 'Đã xuất hàng' ? <Truck size={12} /> : <CheckCircle2 size={12} />}{status}</span>;
+  const className = isPendingSlip(status) ? 'badge-draft' : status === 'Đã xuất hàng' ? 'badge-exported' : 'badge-confirmed';
+  return <span className={`badge ${className}`} data-testid={`status-${status}`}>{isPendingSlip(status) ? <Clock3 size={12} /> : status === 'Đã xuất hàng' ? <Truck size={12} /> : <CheckCircle2 size={12} />}{status}</span>;
 }
 
 function Overview({ slips }: { slips: Slip[] }) {
@@ -323,7 +325,7 @@ function Overview({ slips }: { slips: Slip[] }) {
       </div>
       <section className="stats-grid" aria-label="Tổng quan phiếu xuất">
         <div className="stat-card primary"><div className="stat-label">Tổng phiếu xuất trong kỳ</div><div className="stat-value" data-testid="stat-total">{slips.length}</div><div className="stat-meta">Cập nhật vừa xong</div></div>
-        <div className="stat-card"><div className="stat-label">Chờ xuất hàng</div><div className="stat-value" data-testid="stat-draft">{slips.filter((slip) => slip.status === 'Nháp').length}</div><div className="stat-meta">{dueSoon > 0 ? `${dueSoon} phiếu cần xử lý sớm` : 'Không có phiếu quá hạn'}</div></div>
+         <div className="stat-card"><div className="stat-label">Chờ xuất hàng</div><div className="stat-value" data-testid="stat-draft">{slips.filter((slip) => isPendingSlip(slip.status)).length}</div><div className="stat-meta">{dueSoon > 0 ? `${dueSoon} phiếu cần xử lý sớm` : 'Không có phiếu quá hạn'}</div></div>
         <div className="stat-card"><div className="stat-label">Đã xuất hàng</div><div className="stat-value" data-testid="stat-exported">{exportedCount}</div><div className="stat-meta">Đang chờ xác nhận</div></div>
         <div className="stat-card"><div className="stat-label">Khách hàng xác nhận</div><div className="stat-value" data-testid="stat-confirmed">{confirmedCount}</div><div className="stat-meta">Đối soát hoàn tất</div></div>
       </section>
@@ -333,7 +335,7 @@ function Overview({ slips }: { slips: Slip[] }) {
           <div className="field"><label className="field-label" htmlFor="filter-from">Từ ngày</label><div style={{ position: 'relative' }}><CalendarDays size={13} style={{ position: 'absolute', left: 10, top: 11, color: 'hsl(220 10% 48%)' }} /><input id="filter-from" type="date" className="input" style={{ paddingLeft: 30 }} value={fromDate} onChange={(event) => setFromDate(event.target.value)} data-testid="input-filter-from" /></div></div>
           <div className="field"><label className="field-label" htmlFor="filter-to">Đến ngày</label><div style={{ position: 'relative' }}><CalendarDays size={13} style={{ position: 'absolute', left: 10, top: 11, color: 'hsl(220 10% 48%)' }} /><input id="filter-to" type="date" className="input" style={{ paddingLeft: 30 }} value={toDate} onChange={(event) => setToDate(event.target.value)} data-testid="input-filter-to" /></div></div>
           <div className="field"><label className="field-label" htmlFor="filter-customer">Khách hàng</label><select id="filter-customer" className="select" value={customer} onChange={(event) => setCustomer(event.target.value)} data-testid="select-filter-customer"><option>Tất cả khách hàng</option>{customers.map((item) => <option key={item}>{item}</option>)}</select></div>
-          <div className="field"><label className="field-label" htmlFor="filter-status">Trạng thái</label><select id="filter-status" className="select" value={status} onChange={(event) => setStatus(event.target.value)} data-testid="select-filter-status"><option>Tất cả trạng thái</option><option>Nháp</option><option>Đã xuất hàng</option><option>Khách hàng đã xác nhận</option></select></div>
+           <div className="field"><label className="field-label" htmlFor="filter-status">Trạng thái</label><select id="filter-status" className="select" value={status} onChange={(event) => setStatus(event.target.value)} data-testid="select-filter-status"><option>Tất cả trạng thái</option><option>Chờ xuất</option><option>Nháp</option><option>Đã xuất hàng</option><option>Khách hàng đã xác nhận</option></select></div>
           <div className="field"><label className="field-label" htmlFor="filter-payment">Thanh toán</label><select id="filter-payment" className="select" value={payment} onChange={(event) => setPayment(event.target.value)} data-testid="select-filter-payment"><option>Tất cả thanh toán</option><option>Đã thanh toán</option><option>Chưa thanh toán</option></select></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}><button className="button button-quiet" onClick={resetFilters} data-testid="button-reset-filters"><Filter size={13} /> Đặt lại bộ lọc</button></div>
@@ -358,7 +360,7 @@ function Overview({ slips }: { slips: Slip[] }) {
 }
 
 function Stepper({ status }: { status: SlipStatus }) {
-  const current = status === 'Nháp' ? 0 : status === 'Đã xuất hàng' ? 2 : 3;
+   const current = isPendingSlip(status) ? 0 : status === 'Đã xuất hàng' ? 2 : 3;
   const steps = ['Tạo phiếu', 'Hoàn thiện hồ sơ', 'Đã xuất hàng', 'Khách xác nhận'];
   return <div className="stepper" aria-label="Tiến trình phiếu xuất">{steps.map((step, index) => <div className={`step ${index < current ? 'is-done' : ''} ${index === current ? 'is-current' : ''}`} key={step}><span className="step-dot">{index < current ? <Check size={12} /> : index + 1}</span><span>{step}</span>{index < steps.length - 1 && <span style={{ display: 'contents' }} />}</div>)}</div>;
 }
@@ -387,13 +389,13 @@ function Detail({ slips, updateSlip }: { slips: Slip[]; updateSlip: (slip: Slip)
   const uploadDocument = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) patch({ documentName: file.name }); };
   const addIngredient = () => patch({ ingredients: [...draft.ingredients, { id: `ingredient-${Date.now()}`, name: '', origin: '', lotCode: '' }] });
   const removeIngredient = (id: string) => patch({ ingredients: draft.ingredients.filter((item) => item.id !== id) });
-  const qrVisible = draft.status !== 'Nháp';
+   const qrVisible = !isPendingSlip(draft.status);
   const downloadQr = () => { const blob = new Blob([`CHECKEE F&B | ${draft.id} | ${draft.lotCode}`], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${draft.id}-qr.txt`; anchor.click(); URL.revokeObjectURL(url); };
   return (
     <main className="content-wrap">
       <div className="page-heading detail-heading">
         <div><Link href="/" className="back-link" data-testid="link-back-list"><ArrowLeft size={14} /> Danh sách phiếu xuất</Link><div className="detail-title-line"><h1>{draft.id}</h1><StatusBadge status={draft.status} /></div><p className="page-subtitle">Chi tiết phiếu xuất suất ăn · Đơn hàng {draft.orderCode}</p></div>
-        <div className="action-row">{notice && <span className="save-status" data-testid="status-save-notice">{notice}</span>}<button className="button button-quiet" onClick={saveDraft} data-testid="button-save-draft"><CheckCircle2 size={14} /> Lưu nháp</button>{draft.status === 'Nháp' && <button className="button button-primary" onClick={completeSlip} data-testid="button-complete-slip"><Truck size={14} /> Hoàn tất &amp; xuất hàng</button>}</div>
+         <div className="action-row">{notice && <span className="save-status" data-testid="status-save-notice">{notice}</span>}<button className="button button-quiet" onClick={saveDraft} data-testid="button-save-draft"><CheckCircle2 size={14} /> Lưu nháp</button>{isPendingSlip(draft.status) && <button className="button button-primary" onClick={completeSlip} data-testid="button-complete-slip"><Truck size={14} /> Hoàn tất &amp; xuất hàng</button>}</div>
       </div>
       <Stepper status={draft.status} />
       <div className="detail-grid">

@@ -46,7 +46,7 @@ export type CustomerRecord = {
 };
 
 export type OrderSource = 'A' | 'B';
-export type OrderStatus = 'Chờ xác nhận' | 'Đề xuất thay đổi' | 'Đã xác nhận' | 'Đã xuất hàng';
+export type OrderStatus = 'Chờ xuất' | 'Chờ xác nhận' | 'Đề xuất thay đổi' | 'Đã xác nhận' | 'Đã xuất hàng';
 
 export type OrderItem = {
   id: string;
@@ -354,7 +354,7 @@ const seedOrders: OrderRecord[] = [
     meal: 'Bữa trưa',
     deliveryDate: today,
     deliveryTime: '10:30',
-    status: 'Đã xuất hàng',
+    status: 'Chờ xuất',
     unitPrice: 26000,
     createdAt: new Date().toISOString(),
     items: [
@@ -475,11 +475,14 @@ const legacyManualDispatch = (order: OrderRecord): DispatchDetails => ({
   exportedAt: order.createdAt,
 });
 const normalizeOrder = (order: OrderRecord): OrderRecord => {
-  if (order.source !== 'B') return order;
+  const migrated = order.id === 'DH-250814-018' && order.status === 'Đã xuất hàng' && !order.dispatch
+    ? { ...order, status: 'Chờ xuất' as OrderStatus }
+    : order;
+  if (migrated.source !== 'B') return migrated;
   return {
-    ...order,
+    ...migrated,
     status: 'Đã xuất hàng',
-    dispatch: order.dispatch ?? legacyManualDispatch(order),
+    dispatch: migrated.dispatch ?? legacyManualDispatch(migrated),
   };
 };
 
@@ -741,12 +744,14 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
       </div>
        <form className="workflow-form" onSubmit={submit}>
         <section className="panel">
-           <div className="panel-header"><div><h2 className="panel-heading">① Thông tin đơn hàng</h2><p className="panel-kicker">Thông tin khách hàng và thời điểm tạo đơn.</p></div><span className="badge badge-source-b"><Pencil size={12} /> Tạo thủ công</span></div>
+            <div className="panel-header"><div><h2 className="panel-heading">① Thông tin đơn hàng</h2><p className="panel-kicker">Thông tin khách hàng, thời điểm đặt và lịch giao.</p></div><span className="badge badge-source-b"><Pencil size={12} /> Tạo thủ công</span></div>
            <div className="form-grid-3">
               <div className="field"><label className="field-label" htmlFor="manual-customer-type">Loại khách hàng</label><select id="manual-customer-type" className="select" value={customerType} onChange={(event) => { const nextType = event.target.value as CustomerType; setCustomerType(nextType); setCustomerId(''); setDeliveryAddress(''); updateDispatch({ deliveryAddress: '' }); }} data-testid="select-manual-customer-type"><option>Trường học</option><option>Bệnh viện</option><option>Công ty</option><option>Khác</option></select></div>
                <div className="field form-span-2"><label className="field-label" htmlFor="manual-customer">{customerType === 'Trường học' ? 'Tên trường học' : customerType === 'Bệnh viện' ? 'Tên bệnh viện' : 'Tên khách hàng'}</label><input id="manual-customer" className="input" value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCustomerId(''); }} placeholder={`Nhập ${customerType === 'Trường học' ? 'tên trường học' : customerType === 'Bệnh viện' ? 'tên bệnh viện' : 'tên khách hàng'}`} required data-testid="input-manual-customer" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-date">Ngày đặt</label><input id="manual-date" type="date" className="input" value={orderDate} onChange={(event) => setOrderDate(event.target.value)} required data-testid="input-manual-date" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-time">Giờ đặt</label><input id="manual-time" type="time" className="input" value={orderTime} onChange={(event) => setOrderTime(event.target.value)} required data-testid="input-manual-time" /></div>
+               <div className="field"><label className="field-label" htmlFor="manual-delivery-date">Ngày giao</label><input id="manual-delivery-date" type="date" className="input" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} required data-testid="input-manual-delivery-date" /></div>
+               <div className="field"><label className="field-label" htmlFor="manual-delivery-time">Giờ giao</label><input id="manual-delivery-time" type="time" className="input" value={deliveryTime} onChange={(event) => setDeliveryTime(event.target.value)} required data-testid="input-manual-delivery-time" /></div>
               <div className="field form-span-2"><label className="field-label" htmlFor="manual-address">Địa chỉ giao</label><input id="manual-address" className="input" value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Địa chỉ giao suất ăn" required data-testid="input-manual-address" /></div>
               <div className="field form-span-3"><label className="field-label" htmlFor="manual-note">Ghi chú</label><input id="manual-note" className="input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú cho đơn hàng (nếu có)" data-testid="input-manual-note" /></div>
           </div>
@@ -757,10 +762,8 @@ function OrderForm({ customers, onSave, onCancel }: { customers: CustomerRecord[
               {items.length === 0 ? <div className="empty-state manual-dish-empty"><Utensils size={24} /><div>Chưa có món</div><span>Chọn món ở trên để thêm vào đơn hàng.</span></div> : <div className="manual-dish-list">{items.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">{item.sampleStatus === 'Đã lưu' ? 'Đã lưu mẫu' : 'Chưa lưu mẫu trong ngày'}</span></div><div className="manual-dish-meal"><label className="field-label" htmlFor={`meal-${item.id}`}>Buổi</label><select id={`meal-${item.id}`} className="select" value={mealOptionFor(item.meal)} onChange={(event) => updateDishMeal(item.id, event.target.value as MealOption)} data-testid={`select-manual-meal-${item.id}`}>{MEAL_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`quantity-${item.id}`} className="input" type="number" min="1" value={item.requestedQuantity} onChange={(event) => updateDishQuantity(item.id, event.target.value)} data-testid={`input-manual-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} />{sampleStatus(item) === 'Đã lưu' && <button type="button" className="text-button" onClick={() => setSampleOpenId(sampleOpenId === item.id ? null : item.id)} data-testid={`button-open-manual-sample-${item.id}`}><Eye size={12} /> Xem lưu mẫu</button>}</div><button type="button" className="remove-row" onClick={() => { removeDish(item.id); if (sampleOpenId === item.id) setSampleOpenId(null); }} aria-label={`Xóa ${item.dish}`} data-testid={`button-remove-manual-dish-${item.id}`}><X size={13} /></button>{sampleOpenId === item.id && sampleStatus(item) === 'Đã lưu' && <SampleViewer item={item} deliveryDate={deliveryDate || today} onClose={() => setSampleOpenId(null)} />}</div>)}</div>}
          </section>
         <section className="panel">
-             <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin vận chuyển</h2><p className="panel-kicker">Chọn thời điểm giao, nhập người giao, phương tiện và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
+              <div className="panel-header"><div><h2 className="panel-heading">③ Thông tin vận chuyển</h2><p className="panel-kicker">Nhập người giao, phương tiện và ký tên trực tiếp trên giao diện.</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
           <div className="form-grid-3">
-             <div className="field"><label className="field-label" htmlFor="manual-delivery-date">Ngày giao</label><input id="manual-delivery-date" type="date" className="input" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} required data-testid="input-manual-delivery-date" /></div>
-             <div className="field"><label className="field-label" htmlFor="manual-delivery-time">Giờ giao</label><input id="manual-delivery-time" type="time" className="input" value={deliveryTime} onChange={(event) => setDeliveryTime(event.target.value)} required data-testid="input-manual-delivery-time" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-exporter">Tên người giao hàng</label><input id="manual-dispatch-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" data-testid="input-manual-dispatch-exporter" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-type">Phương tiện</label><input id="manual-dispatch-vehicle-type" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" data-testid="input-manual-dispatch-vehicle-type" /></div>
              <div className="field"><label className="field-label" htmlFor="manual-dispatch-vehicle-plate">Biển số xe</label><input id="manual-dispatch-vehicle-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" data-testid="input-manual-dispatch-vehicle-plate" /></div>
@@ -809,7 +812,7 @@ export function OrderManagement({ createSlip }: { createSlip: (input: CreateDisp
         <td><span className="type-cell">{order.customerType ?? customer?.type ?? 'Chưa cập nhật'}</span></td>
          <td><span className="customer-name">{order.customer}</span><span className="subtext">{order.meal}</span></td>
         <td><strong>{quantity}</strong><span className="subtext">suất xuất · {savedSamples}/{order.items.length} món lưu mẫu</span>{!samplesComplete && <span className="warning-note"><AlertCircle size={11} />Chưa đủ mẫu</span>}</td>
-        <td><OrderStatusBadge status={order.status} />{order.dispatch && <span className="subtext"><CheckCircle2 size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />Có phiếu xuất</span>}</td>
+         <td><OrderStatusBadge status={order.status} /></td>
         <td><Link href={`/quan-ly-don-hang/${order.id}`} className="icon-button" aria-label={`Xem ${order.id}`} data-testid={`button-view-order-${order.id}`}><ChevronRight size={15} /></Link></td>
       </tr>
     );
@@ -847,7 +850,7 @@ const createDispatchDraft = (order?: OrderRecord, customer?: CustomerRecord, bat
     lotCode: batchCode,
     entryMode: order?.source === 'A' ? 'preorder' : 'normal',
     qrMode: 'lot',
-    traceability: order ? traceabilityForItems(order.items, order.deliveryDate) : [],
+    traceability: order ? traceabilityForItems(order.items, order.deliveryDate || today) : [],
     exportedAt: '',
   };
   return order?.dispatch ? { ...fallback, ...order.dispatch, entryMode: order.dispatch.entryMode ?? fallback.entryMode } : fallback;
@@ -925,7 +928,11 @@ function DispatchQr({ order, dispatch, onQrModeChange }: { order: OrderRecord; d
 
 function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { order?: OrderRecord; customer?: CustomerRecord; batchCode: string; onUpdate: (order: OrderRecord) => void; createSlip: (input: CreateDispatchSlipInput) => string }) {
   const [, setLocation] = useLocation();
-  const [draft, setDraft] = useState<OrderRecord | undefined>(order);
+  const [draft, setDraft] = useState<OrderRecord | undefined>(() => order
+    ? order.source === 'A' && order.status !== 'Đã xuất hàng'
+      ? { ...order, deliveryDate: '', deliveryTime: '' }
+      : order
+    : order);
   const [dispatchError, setDispatchError] = useState('');
   const [selectedExportDish, setSelectedExportDish] = useState('');
   const [sampleOpenId, setSampleOpenId] = useState<string | null>(null);
@@ -988,6 +995,8 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
   };
   const completeDispatch = () => {
     const missing: string[] = [];
+    if (!draft.deliveryDate) missing.push('Ngày giao');
+    if (!draft.deliveryTime) missing.push('Giờ giao');
     if (!dispatch.exporterName.trim()) missing.push('Tên người giao hàng');
     if (!dispatch.vehicleType.trim()) missing.push('Phương tiện');
     if (!dispatch.vehiclePlate.trim()) missing.push('Biển số xe');
@@ -996,7 +1005,7 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
       setDispatchError(`Vui lòng bổ sung: ${missing.join(', ')}.`);
       return;
     }
-    const orderCode = draft.orderCode ?? batchCode;
+    const orderCode = draft.orderCode ?? batchCodeFor(draft.deliveryDate, 1) ?? batchCode;
     if (draft.source === 'A' && exportItems.length === 0) {
       setDispatchError('Vui lòng chọn ít nhất một món trong Danh sách xuất.');
       return;
@@ -1009,7 +1018,7 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
       ...dispatch,
       deliveryAddress: draft.deliveryAddress ?? customer?.deliveryAddress ?? '',
       lotCode: dispatch.lotCode || batchCode,
-      traceability: traceabilityForItems(exportItems, draft.deliveryDate),
+      traceability: traceabilityForItems(exportItems, draft.deliveryDate || today),
       exportedAt: new Date().toISOString(),
     };
     const linkedSlipId = draft.linkedSlipId ?? createSlip({
@@ -1052,8 +1061,6 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
             <div className="readonly-field form-span-2"><span className="field-label">Địa chỉ</span><div className="readonly-value">{draft.deliveryAddress || customer?.deliveryAddress || 'Chưa cập nhật'}</div></div>
              <div className="readonly-field"><span className="field-label">Ngày đặt</span><div className="readonly-value">{displayDate(orderDateFor(draft))}</div></div>
              <div className="readonly-field"><span className="field-label">Giờ đặt</span><div className="readonly-value"><Clock3 size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{orderTimeFor(draft)}</div></div>
-             <div className="readonly-field"><span className="field-label">Ngày giao</span><div className="readonly-value">{displayDate(draft.deliveryDate)}</div></div>
-             <div className="readonly-field"><span className="field-label">Giờ giao</span><div className="readonly-value"><Clock3 size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{draft.deliveryTime}</div></div>
              <div className="readonly-field"><span className="field-label">Tổng số suất xuất</span><div className="readonly-value">{totalQuantity} suất</div></div>
           </div>
         </section>
@@ -1065,11 +1072,13 @@ function OrderDetail({ order, customer, batchCode, onUpdate, createSlip }: { ord
             <div className="add-dish-row"><select className="select" value={selectedExportDish} onChange={(event) => setSelectedExportDish(event.target.value)} aria-label="Chọn món đã lưu mẫu để xuất" disabled={isExported} data-testid="select-detail-export-dish"><option value="">Chọn món đã lưu mẫu</option>{availableExportDishes.map((item) => <option value={item.dish} key={item.dish}>{item.dish}</option>)}</select><button type="button" className="button button-quiet" onClick={addExportDish} disabled={isExported || !selectedExportDish} data-testid="button-add-detail-export-dish"><Plus size={14} /> Thêm món</button></div>
              {exportItems.length === 0 ? <div className="empty-state manual-dish-empty"><Truck size={24} /><div>Chưa có món xuất</div><span>Chọn món đã lưu mẫu ở trên để thêm vào danh sách xuất.</span></div> : <div className="manual-dish-list">{exportItems.map((item) => <div className="manual-dish-item" key={item.id}><div><strong>{item.dish}</strong><span className="subtext">Đã lưu mẫu</span></div><div className="manual-dish-meal"><label className="field-label" htmlFor={`detail-meal-${item.id}`}>Buổi</label><select id={`detail-meal-${item.id}`} className="select" value={mealOptionFor(item.meal)} onChange={(event) => updateExportMeal(item.id, event.target.value as MealOption)} disabled={isExported} data-testid={`select-detail-export-meal-${item.id}`}>{MEAL_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></div><div className="manual-dish-quantity"><label className="field-label" htmlFor={`detail-quantity-${item.id}`}>Số suất</label><div className="quantity-input"><input id={`detail-quantity-${item.id}`} className="input" type="number" min="1" value={item.supplierQuantity} onChange={(event) => updateExportQuantity(item.id, event.target.value)} disabled={isExported} data-testid={`input-export-quantity-${item.id}`} /><span>suất</span></div></div><div className="manual-dish-actions"><SampleStatusBadge status={item.sampleStatus} /><button type="button" className="text-button" onClick={() => setSampleOpenId(item.id)} data-testid={`button-open-export-sample-${item.id}`}><Eye size={12} /> Xem chi tiết</button></div><button type="button" className="remove-row" onClick={() => removeExportDish(item.id)} disabled={isExported} aria-label={`Xóa ${item.dish} khỏi danh sách xuất`} data-testid={`button-remove-detail-export-dish-${item.id}`}><X size={13} /></button></div>)}</div>}
           </section>
-         {sampleItem && <SampleViewer item={sampleItem} deliveryDate={draft.deliveryDate} onClose={() => setSampleOpenId(null)} />}
+          {sampleItem && <SampleViewer item={sampleItem} deliveryDate={draft.deliveryDate || today} onClose={() => setSampleOpenId(null)} />}
         <section className="panel">
             <div className="panel-header"><div><h2 className="panel-heading">{draft.source === 'A' ? '④' : '③'} Thông tin vận chuyển</h2><p className="panel-kicker">{draft.source === 'B' ? 'Thông tin vận chuyển đã lưu khi hoàn tất tạo đơn.' : 'Nhập thông tin giao hàng và ký tên trực tiếp trên giao diện.'}</p></div><Truck size={17} color="hsl(17 91% 52%)" /></div>
           <div className="form-grid-3">
-            <div className="field"><label className="field-label" htmlFor="order-exporter">Tên người giao hàng</label><input id="order-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" disabled={isExported} data-testid="input-order-exporter" /></div>
+              <div className="field"><label className="field-label" htmlFor="order-delivery-date">Ngày giao</label><input id="order-delivery-date" type="date" className="input" value={draft.deliveryDate} onChange={(event) => updateDraft({ deliveryDate: event.target.value })} disabled={isExported} required data-testid="input-order-delivery-date" /></div>
+              <div className="field"><label className="field-label" htmlFor="order-delivery-time">Giờ giao</label><input id="order-delivery-time" type="time" className="input" value={draft.deliveryTime} onChange={(event) => updateDraft({ deliveryTime: event.target.value })} disabled={isExported} required data-testid="input-order-delivery-time" /></div>
+              <div className="field"><label className="field-label" htmlFor="order-exporter">Tên người giao hàng</label><input id="order-exporter" className="input" value={dispatch.exporterName} onChange={(event) => updateDispatch({ exporterName: event.target.value })} placeholder="Nhập họ và tên" disabled={isExported} data-testid="input-order-exporter" /></div>
             <div className="field"><label className="field-label" htmlFor="order-vehicle">Phương tiện</label><input id="order-vehicle" className="input" value={dispatch.vehicleType} onChange={(event) => updateDispatch({ vehicleType: event.target.value })} placeholder="Ví dụ: Xe tải lạnh" disabled={isExported} data-testid="input-order-vehicle" /></div>
             <div className="field"><label className="field-label" htmlFor="order-plate">Biển số xe</label><input id="order-plate" className="input" value={dispatch.vehiclePlate} onChange={(event) => updateDispatch({ vehiclePlate: event.target.value })} placeholder="51D-000.00" disabled={isExported} data-testid="input-order-plate" /></div>
              <div className="field form-span-3"><span className="field-label">Chữ ký người giao hàng</span><SignaturePad value={dispatch.signature} onChange={(signature) => updateDispatch({ signature })} disabled={isExported} /></div>
