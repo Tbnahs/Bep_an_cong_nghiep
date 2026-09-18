@@ -1,0 +1,33 @@
+Tiếp tục trên cùng hệ thống Checkee F&B đã có sidebar, "Quản lý khách hàng" và "Quản lý đơn hàng" từ trước. Yêu cầu bắt buộc:
+
+1. GIỮ NGUYÊN toàn bộ sidebar hiện tại, không đổi tên/xoá/sắp xếp lại các mục cũ.
+2. CHỈ THÊM mục mới "Phiếu xuất suất ăn" vào sidebar, đặt ngay dưới mục "Quản lý đơn hàng".
+3. Không tự tạo nội dung cho các mục sidebar khác chưa được mô tả.
+4. Đồng bộ phong cách với các màn đã dựng trước đó (nền sidebar cam đậm, nội dung trắng bo góc 8-12px, nút chính cam đậm, bảng header cam nhạt, badge màu ngữ nghĩa, chữ thường).
+5. QUAN TRỌNG: tên field ở Màn 7 phải trùng khớp chính xác với màn "Nhập suất ăn" bên hệ thống khách hàng (iSchool F&B) — vì đây là 2 phía của cùng 1 bản ghi dữ liệu dùng chung.
+
+LOGIC NGHIỆP VỤ BẮT BUỘC (áp dụng xuyên suốt, không chỉ là giao diện tĩnh):
+- Ngay khi 1 đơn hàng chuyển sang trạng thái "Đã xác nhận" (dù đến từ đơn tự động hay NCC tạo tay), hệ thống TỰ ĐỘNG sinh ra 1 phiếu xuất mới ở trạng thái "Nháp – chờ xuất hàng", pre-fill sẵn: khách hàng, địa chỉ giao, danh sách món + số lượng đã xác nhận, thời gian giao dự kiến, số tiền tạm tính theo đơn giá hợp đồng. NCC không cần thao tác gì để phiếu này xuất hiện.
+- Phiếu ở trạng thái "Nháp" chưa có mã lô, chưa có chứng từ, chưa có chữ ký người giao — nút "Xác nhận & xuất hàng" bị disable cho tới khi NCC điền đủ các trường bắt buộc này.
+- Khi NCC bấm "Xác nhận & xuất hàng", phiếu chuyển sang trạng thái "Đã xuất hàng" và hệ thống mới sinh mã QR gắn với mã lô đó.
+
+MÀN 7 — Chi tiết & hoàn tất phiếu xuất suất ăn
+- Header: back, tiêu đề động theo trạng thái ("Phiếu xuất — Nháp chờ hoàn tất" hoặc "Chi tiết phiếu xuất"), badge trạng thái cạnh tiêu đề (Nháp = vàng, Đã xuất hàng = cam, Khách đã xác nhận = xanh lá), góc phải "Lưu nháp" (viền) và "Xác nhận & xuất hàng" (cam đậm, disable nếu thiếu trường bắt buộc, kèm tooltip nhỏ báo còn thiếu gì)
+- Khối "Thông tin cơ bản": Chọn khách hàng (tự điền, chỉ đọc), Chọn loại thực đơn (tự điền, chỉ đọc), Bữa ăn (tự điền dạng nút Sáng/Trưa/Chiều/Tối, chỉ đọc)
+- Khối "Danh sách món ăn theo thực đơn": bảng — Buổi | Món ăn (theo thực đơn) | Số lượng xác nhận — các dòng này tự điền sẵn từ lúc đơn được xác nhận, NCC chỉ xem lại không sửa ở đây
+- Khối "Nguồn gốc nguyên liệu đầu vào" (bắt buộc điền trước khi xuất hàng thật): bảng — nguyên liệu chính đã dùng + tên NCC nguyên liệu tương ứng, nút "+ thêm dòng"
+- Khối "Chứng từ & Hóa đơn" (bắt buộc): nút "Tải ảnh lên" + khung preview ảnh hóa đơn/biên bản
+- Cột phải "Thông tin xuất hàng": Thời gian xuất (date-time picker, mặc định = giờ hiện tại khi NCC mở phiếu để hoàn tất), "Mã lô suất ăn" * (bắt buộc, input hoặc gợi ý tự sinh dạng số tăng dần), "Số lượng suất" (tự điền từ đơn, sửa được nếu có sai lệch thực tế), "Số tiền trả (VNĐ)" (tự tính, sửa được)
+- Khối "Xác nhận" (bắt buộc): ô "Người giao (NCC)" — nhập tên/ký; ô "Người nhận (khách hàng)" — disable/xám "Chờ khách hàng xác nhận"
+- Khối "Mã QR phiếu xuất" (CHỈ hiện sau khi trạng thái = "Đã xuất hàng"): QR lớn ở giữa, ghi chú "Quét mã để xem chi tiết hoặc truy xuất nguồn gốc", 2 nút "Tải xuống" và "In phiếu"
+- Dưới cùng: thanh trạng thái dạng stepper ngang: Đã xác nhận đơn → Nháp chờ xuất hàng → Đã xuất hàng → Khách hàng đã xác nhận nhận hàng — bước hiện tại được tô đậm
+
+MÀN 8 — Danh sách phiếu xuất & đối soát
+- Tiêu đề "Phiếu xuất suất ăn"
+- 5 thẻ tổng quan: Số phiếu đang ở dạng nháp (cần hoàn tất trước giờ giao), Tổng suất đã xuất trong kỳ, Tổng tiền đã đối soát, Số phiếu có món "Không đạt", Số phiếu chờ khách xác nhận
+- Bộ lọc: Từ ngày-Đến ngày, Khách hàng, Trạng thái (Nháp/Đã xuất hàng/Khách đã xác nhận), Trạng thái thanh toán, nút "Xuất báo cáo" (viền cam)
+- Bảng: Mã lô (hiển thị "Chưa có" nếu còn ở dạng nháp) | Khách hàng | Ngày giao dự kiến | Buổi ăn | Số suất | Trạng thái phiếu (badge: Nháp = vàng, Đã xuất hàng = cam, Khách đã xác nhận = xanh lá) | Đánh giá chất lượng (hiển thị dạng "x/y món đạt", để trống nếu khách chưa đánh giá) | Số tiền | Trạng thái thanh toán (badge) | Thao tác (Hoàn tất phiếu nếu đang Nháp / Xem chi tiết nếu đã xong)
+- Phiếu "Nháp" mà còn dưới 2 tiếng tới giờ giao dự kiến: tô nền vàng nhạt cảnh báo cần hoàn tất gấp
+- Dòng có món đánh giá "Không đạt": tô nền hồng nhạt
+
+Yêu cầu bắt buộc xuyên suốt: đồng bộ màu badge, spacing, bo góc với các màn đã dựng ở Đợt 1 và Đợt 2. Đánh giá chất lượng luôn ở cấp độ từng món ăn (do khách hàng nhập ở hệ thống của họ), NCC không tự chọn 1 badge tổng cho cả phiếu — trạng thái tổng luôn được hệ thống tự suy ra.

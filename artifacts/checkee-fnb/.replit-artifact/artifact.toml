@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Checkee F&B"
+description = "An operations dashboard for suppliers to manage meal dispatch slips, complete shipment details, verify quality status, and track reconciliation for school food orders."
+version = "1.0.0"
+id = "artifacts/checkee-fnb"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20330
+
+[services.development]
+run = "pnpm --filter @workspace/checkee-fnb run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/checkee-fnb", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/checkee-fnb/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20330"
+BASE_PATH = "/"
